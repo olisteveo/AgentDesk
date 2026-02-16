@@ -4,6 +4,7 @@
   height: 100vh;
   background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
   overflow: hidden;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 .office-canvas {
@@ -12,22 +13,24 @@
   height: 100%;
 }
 
+/* UI Panel - Top Left */
 .ui-panel {
   position: absolute;
   top: 20px;
   left: 20px;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.9);
   padding: 20px;
-  border-radius: 12px;
+  border-radius: 16px;
   border: 1px solid #333;
-  max-width: 320px;
-  backdrop-filter: blur(10px);
+  max-width: 350px;
+  backdrop-filter: blur(15px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 .ui-panel h1 {
-  font-size: 24px;
+  font-size: 28px;
   margin-bottom: 8px;
-  background: linear-gradient(90deg, #ff6b6b, #feca57);
+  background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -40,10 +43,12 @@
 }
 
 .task-log {
-  max-height: 200px;
+  max-height: 250px;
   overflow-y: auto;
   font-size: 12px;
   color: #aaa;
+  border-top: 1px solid #333;
+  padding-top: 10px;
 }
 
 .task-log::-webkit-scrollbar {
@@ -51,16 +56,17 @@
 }
 
 .task-log::-webkit-scrollbar-track {
-  background: #1a1a2e;
+  background: #0a0a0f;
+  border-radius: 3px;
 }
 
 .task-log::-webkit-scrollbar-thumb {
-  background: #333;
+  background: #444;
   border-radius: 3px;
 }
 
 .task-entry {
-  padding: 6px 0;
+  padding: 8px 0;
   border-bottom: 1px solid #222;
   line-height: 1.4;
 }
@@ -69,18 +75,481 @@
   border-bottom: none;
 }
 
+/* Controls - Bottom Center */
 .controls {
   position: absolute;
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 12px;
+  gap: 15px;
   z-index: 10;
 }
 
 .controls button {
-  padding: 14px 28px;
+  padding: 16px 32px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+}
+
+.controls button:hover {
+  transform: scale(1.05) translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+}
+
+.controls button:active {
+  transform: scale(0.98);
+}
+
+/* Stats Panel - Top Right */
+.stats-panel {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.9);
+  padding: 20px 25px;
+  border-radius: 16px;
+  border: 1px solid #333;
+  backdrop-filter: blur(15px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  min-width: 180px;
+}
+
+.stats-panel h3 {
+  color: #fff;
+  font-size: 14px;
+  margin: 10px 0;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Cost Summary in Stats Panel */
+.cost-summary {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #333;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cost-summary:hover {
+  opacity: 0.8;
+}
+
+.cost-summary h3 {
+  margin: 0 0 8px 0;
+  color: #feca57;
+}
+
+.cost-amount {
+  font-size: 24px;
+  font-weight: bold;
+  color: #1dd1a1;
+  margin-bottom: 5px;
+}
+
+.cost-breakdown {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: #888;
+}
+
+/* Cost Estimate in Task Form */
+.cost-estimate {
+  background: rgba(29, 209, 161, 0.1);
+  border: 1px solid #1dd1a1;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 20px;
+  text-align: center;
+  color: #fff;
+}
+
+.cost-estimate strong {
+  color: #1dd1a1;
+  font-size: 18px;
+}
+
+.cost-model {
+  color: #888;
+  font-size: 12px;
+}
+
+/* Cost Panel Overlay */
+.cost-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+}
+
+.cost-panel {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 20px;
+  border: 1px solid #444;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.9);
+}
+
+.cost-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25px 30px;
+  border-bottom: 1px solid #333;
+}
+
+.cost-panel-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 24px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.cost-section {
+  padding: 25px 30px;
+  border-bottom: 1px solid #333;
+}
+
+.cost-section:last-child {
+  border-bottom: none;
+}
+
+.cost-section h3 {
+  margin: 0 0 20px 0;
+  color: #fff;
+  font-size: 16px;
+}
+
+/* Cost Cards */
+.cost-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+
+.cost-card {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid #333;
+}
+
+.cost-card.api {
+  border-color: #667eea;
+}
+
+.cost-card.subscription {
+  border-color: #feca57;
+}
+
+.cost-card.total {
+  border-color: #1dd1a1;
+  background: rgba(29, 209, 161, 0.1);
+}
+
+.cost-label {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cost-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.cost-card.api .cost-value {
+  color: #667eea;
+}
+
+.cost-card.subscription .cost-value {
+  color: #feca57;
+}
+
+.cost-card.total .cost-value {
+  color: #1dd1a1;
+}
+
+/* Subscriptions List */
+.subscriptions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.subscription-item {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 15px;
+  align-items: center;
+  border: 1px solid #333;
+}
+
+.sub-name {
+  font-weight: 600;
+  color: #fff;
+  font-size: 14px;
+}
+
+.sub-tier {
+  font-size: 11px;
+  color: #888;
+}
+
+.sub-cost {
+  text-align: right;
+}
+
+.sub-monthly {
+  font-weight: 600;
+  color: #feca57;
+  font-size: 14px;
+}
+
+.sub-next {
+  font-size: 11px;
+  color: #888;
+}
+
+.sub-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.feature-tag {
+  background: rgba(102, 126, 234, 0.2);
+  color: #667eea;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.monthly-total {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #333;
+  text-align: right;
+  color: #888;
+  font-size: 14px;
+}
+
+.monthly-total strong {
+  color: #feca57;
+  font-size: 18px;
+}
+
+/* Pricing Table */
+.pricing-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pricing-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 15px;
+  padding: 10px 15px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.pricing-name {
+  color: #fff;
+  font-weight: 500;
+}
+
+.pricing-input {
+  color: #48dbfb;
+  text-align: right;
+}
+
+.pricing-output {
+  color: #ff6b6b;
+  text-align: right;
+}
+
+/* Task Costs */
+.task-costs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.task-cost-item {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr auto;
+  gap: 15px;
+  padding: 10px 15px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  align-items: center;
+}
+
+.task-name {
+  color: #fff;
+  font-weight: 500;
+}
+
+.task-model {
+  color: #888;
+  font-size: 11px;
+}
+
+.task-cost {
+  color: #1dd1a1;
+  font-weight: 600;
+  text-align: right;
+}
+
+.no-tasks {
+  text-align: center;
+  color: #888;
+  padding: 30px;
+  font-style: italic;
+}
+
+/* Task Form Overlay */
+.task-form-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  backdrop-filter: blur(5px);
+}
+
+.task-form {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  padding: 35px;
+  border-radius: 20px;
+  border: 1px solid #444;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.task-form h2 {
+  color: #fff;
+  margin-bottom: 25px;
+  font-size: 24px;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: #aaa;
+  font-size: 13px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.form-group select,
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.form-group select:focus,
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.form-group select option {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 10px;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+.form-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 25px;
+}
+
+.form-buttons button {
+  flex: 1;
+  padding: 14px 24px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   border-radius: 10px;
@@ -88,61 +557,82 @@
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  transition: all 0.2s;
 }
 
-.controls button:hover {
-  transform: scale(1.05) translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+.form-buttons button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
 }
 
-.controls button:active {
-  transform: scale(0.95);
+.form-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.stats-panel {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(0, 0, 0, 0.85);
-  padding: 15px 20px;
-  border-radius: 12px;
-  border: 1px solid #333;
-  backdrop-filter: blur(10px);
+.form-buttons button.secondary {
+  background: linear-gradient(135deg, #444 0%, #333 100%);
 }
 
-.stats-panel h3 {
+.form-buttons button.secondary:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+::selection {
+  background: rgba(102, 126, 234, 0.3);
   color: #fff;
-  font-size: 14px;
-  margin: 8px 0;
-  font-weight: 500;
 }
 
+/* Responsive */
 @media (max-width: 768px) {
   .ui-panel {
-    max-width: 250px;
+    max-width: 280px;
     padding: 15px;
   }
   
   .ui-panel h1 {
-    font-size: 20px;
-  }
-  
-  .controls {
-    flex-wrap: wrap;
-    justify-content: center;
-    bottom: 20px;
-  }
-  
-  .controls button {
-    padding: 12px 20px;
-    font-size: 12px;
+    font-size: 22px;
   }
   
   .stats-panel {
     top: auto;
     bottom: 100px;
     right: 10px;
+    left: 10px;
+    min-width: auto;
+  }
+  
+  .controls {
+    flex-wrap: wrap;
+    bottom: 20px;
+  }
+  
+  .controls button {
+    padding: 12px 20px;
+    font-size: 13px;
+  }
+  
+  .task-form {
+    padding: 25px;
+    margin: 20px;
   }
 }

@@ -1,13 +1,13 @@
-import React from 'react';
+import type { FC } from 'react';
 import OfficeCanvas from './components/OfficeCanvas';
 import './App.css';
 
-function App() {
+const App: FC = () => {
   return (
     <div className="app">
       <OfficeCanvas />
     </div>
   );
-}
+};
 
 export default App;
