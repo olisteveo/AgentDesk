@@ -154,17 +154,51 @@ const AVAILABLE_MODELS = [
   { id: 'nano-banana', name: 'Nano Banana', provider: 'custom', color: '#feca57' }
 ];
 
-// Default desk configuration - users can customize this
+// Calculate desk positions dynamically based on how many desks exist
+const calculateDeskLayout = (desks: Zone[]): Zone[] => {
+  const baseDesks = desks.filter(d => d.id === 'ceo' || d.id === 'ops' || d.id === 'meeting');
+  const userDesks = desks.filter(d => d.id?.startsWith('desk'));
+  
+  // Start positions - CEO and Ops close together at top
+  const layout: Zone[] = [
+    { ...baseDesks.find(d => d.id === 'ceo')!, x: 0.30, y: 0.15, w: 200, h: 100 },
+    { ...baseDesks.find(d => d.id === 'ops')!, x: 0.70, y: 0.15, w: 200, h: 100 }
+  ];
+  
+  // Add user desks in pairs
+  userDesks.forEach((desk, index) => {
+    const row = Math.floor(index / 2);
+    const isLeft = index % 2 === 0;
+    layout.push({
+      ...desk,
+      x: isLeft ? 0.30 : 0.70,
+      y: 0.32 + row * 0.17,
+      w: 200,
+      h: 100
+    });
+  });
+  
+  // Meeting room at bottom, moves down as desks added
+  const meetingY = userDesks.length > 0 
+    ? 0.32 + Math.ceil(userDesks.length / 2) * 0.17 + 0.05
+    : 0.32;
+  
+  layout.push({
+    ...baseDesks.find(d => d.id === 'meeting')!,
+    x: 0.5,
+    y: Math.min(meetingY, 0.90),
+    w: 400,
+    h: 120
+  });
+  
+  return layout;
+};
+
+// Default starts with just CEO, Ops, Meeting Room close together
 const DEFAULT_DESKS: Zone[] = [
-  { id: 'ceo', x: 0.30, y: 0.10, w: 200, h: 100, color: '#ffd700', label: 'CEO Office' },
-  { id: 'ops', x: 0.70, y: 0.10, w: 200, h: 100, color: '#ff6b6b', label: 'Operations' },
-  { id: 'desk1', x: 0.30, y: 0.28, w: 200, h: 100, color: '#feca57', label: 'Desk 1' },
-  { id: 'desk2', x: 0.70, y: 0.28, w: 200, h: 100, color: '#48dbfb', label: 'Desk 2' },
-  { id: 'desk3', x: 0.30, y: 0.46, w: 200, h: 100, color: '#ff9ff3', label: 'Desk 3' },
-  { id: 'desk4', x: 0.70, y: 0.46, w: 200, h: 100, color: '#54a0ff', label: 'Desk 4' },
-  { id: 'desk5', x: 0.30, y: 0.64, w: 200, h: 100, color: '#1dd1a1', label: 'Desk 5' },
-  { id: 'desk6', x: 0.70, y: 0.64, w: 200, h: 100, color: '#a29bfe', label: 'Desk 6' },
-  { id: 'meeting', x: 0.5, y: 0.85, w: 400, h: 120, color: '#74b9ff', label: 'Meeting Room' }
+  { id: 'ceo', x: 0.30, y: 0.15, w: 200, h: 100, color: '#ffd700', label: 'CEO Office' },
+  { id: 'ops', x: 0.70, y: 0.15, w: 200, h: 100, color: '#ff6b6b', label: 'Operations' },
+  { id: 'meeting', x: 0.5, y: 0.32, w: 400, h: 120, color: '#74b9ff', label: 'Meeting Room' }
 ];
 
 // Desk to model assignments - users configure this
@@ -251,7 +285,8 @@ const OfficeCanvas: React.FC = () => {
   const [newNote, setNewNote] = useState('');
 
   const calculateZones = useCallback((width: number, height: number): Record<string, Zone> => {
-    return desks.reduce((acc, desk) => ({
+    const layout = calculateDeskLayout(desks);
+    return layout.reduce((acc, desk) => ({
       ...acc,
       [desk.id!]: {
         ...desk,
@@ -920,6 +955,15 @@ const OfficeCanvas: React.FC = () => {
     <div className="office-canvas-container">
       <canvas ref={canvasRef} className="office-canvas" />
 
+      {/* Top Navigation Bar */}
+      <div className="top-nav">
+        <button onClick={() => setShowTaskForm(true)}>New Task</button>
+        <button onClick={() => setShowMeetingRoom(true)}>Meeting Room</button>
+        <button onClick={() => setShowSettings(true)}>Settings</button>
+        <button onClick={togglePause}>{isPaused ? 'Resume' : 'Pause'}</button>
+        <button onClick={resetOffice}>Reset</button>
+      </div>
+
       <div className="left-sidebar">
         <div className="ui-panel" onClick={() => setShowWhiteboard(true)} style={{ cursor: 'pointer' }}>
           <h1>Kreative</h1>
@@ -965,14 +1009,6 @@ const OfficeCanvas: React.FC = () => {
           <div style={{ marginTop: '8px', fontSize: '10px', color: '#888', textAlign: 'center' }}>
             Click to edit
           </div>
-        </div>
-
-        <div className="sidebar-controls">
-          <button onClick={() => setShowTaskForm(true)}>New Task</button>
-          <button onClick={() => setShowMeetingRoom(true)}>Meeting Room</button>
-          <button onClick={() => setShowSettings(true)}>Settings</button>
-          <button onClick={togglePause}>{isPaused ? 'Resume' : 'Pause'}</button>
-          <button onClick={resetOffice}>Reset</button>
         </div>
       </div>
 
