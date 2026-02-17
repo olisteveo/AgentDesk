@@ -47,6 +47,24 @@ interface Task {
   modelUsed?: string;
 }
 
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  content: string;
+  timestamp: number;
+  isUser: boolean;
+}
+
+interface Meeting {
+  id: string;
+  topic: string;
+  participants: string[];
+  messages: ChatMessage[];
+  startedAt: number;
+}
+
 interface Subscription {
   id: string;
   service: string;
@@ -129,7 +147,8 @@ const ZONES: Record<string, Zone> = {
   ops: { x: 0.5, y: 0.28, w: 200, h: 110, color: '#ff6b6b', label: '🦅 Operations' },
   creative: { x: 0.18, y: 0.50, w: 260, h: 160, color: '#feca57', label: '🍌 Nano Banana Studio' },
   research: { x: 0.82, y: 0.50, w: 240, h: 160, color: '#48dbfb', label: '🔬 Research Lab' },
-  engineering: { x: 0.5, y: 0.78, w: 600, h: 200, color: '#1dd1a1', label: '💻 Engineering Floor' }
+  engineering: { x: 0.5, y: 0.78, w: 600, h: 200, color: '#1dd1a1', label: '💻 Engineering Floor' },
+  meeting: { x: 0.5, y: 0.50, w: 180, h: 120, color: '#a29bfe', label: '📅 Meeting Room' }
 };
 
 const INITIAL_AGENTS: Agent[] = [
@@ -161,6 +180,14 @@ const OfficeCanvas: React.FC = () => {
   const [todayApiCost, setTodayApiCost] = useState<number>(0);
   const animationRef = useRef<number | undefined>(undefined);
   const dimensionsRef = useRef({ width: 0, height: 0 });
+
+  // Meeting room state
+  const [showMeetingRoom, setShowMeetingRoom] = useState(false);
+  const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null);
+  const [meetingTopic, setMeetingTopic] = useState('');
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const calculateZones = useCallback((width: number, height: number): Record<string, Zone> => {
     return Object.entries(ZONES).reduce((acc, [key, zone]) => ({
@@ -277,6 +304,141 @@ const OfficeCanvas: React.FC = () => {
     setTaskDescription('');
     setSelectedAgent('');
   }, [selectedAgent, taskTitle, taskDescription, agents, addLogEntry, calculateZones, getModelForAgent, calculateTaskCost, updateTodayCost]);
+
+  // Meeting room functions
+  const scrollToBottom = useCallback(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const startMeeting = useCallback(() => {
+    if (!meetingTopic || selectedParticipants.length === 0) return;
+
+    const newMeeting: Meeting = {
+      id: `meeting-${Date.now()}`,
+      topic: meetingTopic,
+      participants: selectedParticipants,
+      messages: [],
+      startedAt: Date.now()
+    };
+
+    setActiveMeeting(newMeeting);
+    addLogEntry(`📅 Meeting started: "${meetingTopic}" with ${selectedParticipants.length} participants`);
+
+    // Move selected agents to meeting room
+    setAgents(prev => prev.map(agent => {
+      if (selectedParticipants.includes(agent.id)) {
+        const zones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
+        const participantIndex = selectedParticipants.indexOf(agent.id);
+        const angle = (participantIndex / selectedParticipants.length) * Math.PI * 2;
+        const radius = 40;
+        return {
+          ...agent,
+          targetX: zones.meeting.x + Math.cos(angle) * radius,
+          targetY: zones.meeting.y + Math.sin(angle) * radius,
+          isWorking: true
+        };
+      }
+      return agent;
+    }));
+
+    // Add welcome message
+    setTimeout(() => {
+      setActiveMeeting(prev => {
+        if (!prev) return null;
+        const welcomeMessage: ChatMessage = {
+          id: `msg-${Date.now()}`,
+          senderId: 'system',
+          senderName: 'System',
+          senderAvatar: '🤖',
+          content: `Meeting "${meetingTopic}" has started. Discuss away!`,
+          timestamp: Date.now(),
+          isUser: false
+        };
+        return { ...prev, messages: [...prev.messages, welcomeMessage] };
+      });
+    }, 500);
+  }, [meetingTopic, selectedParticipants, addLogEntry, calculateZones]);
+
+  const sendChatMessage = useCallback(() => {
+    if (!chatInput.trim() || !activeMeeting) return;
+
+    const newMessage: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      senderId: 'user',
+      senderName: 'You',
+      senderAvatar: '👔',
+      content: chatInput.trim(),
+      timestamp: Date.now(),
+      isUser: true
+    };
+
+    setActiveMeeting(prev => {
+      if (!prev) return null;
+      return { ...prev, messages: [...prev.messages, newMessage] };
+    });
+    setChatInput('');
+    scrollToBottom();
+
+    // Simulate agent responses
+    setTimeout(() => {
+      const respondingAgent = agents.find(a => selectedParticipants.includes(a.id) && a.id !== 'user');
+      if (respondingAgent && Math.random() > 0.3) {
+        const responses = [
+          "That's a great point! I agree with that approach.",
+          "Interesting idea. Let me think about how we could implement that.",
+          "I have some concerns about the timeline. Can we discuss that?",
+          "This aligns well with our goals. I'm on board!",
+          "Could you elaborate on that? I want to make sure I understand.",
+          "From my perspective, we should prioritize this differently.",
+          "I've worked on something similar before. Here's what I learned...",
+          "Good suggestion! I'll look into the technical feasibility.",
+          "Let's make sure we're not overcomplicating this.",
+          "I can take ownership of this task if needed."
+        ];
+        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+        
+        const agentMessage: ChatMessage = {
+          id: `msg-${Date.now()}`,
+          senderId: respondingAgent.id,
+          senderName: respondingAgent.name,
+          senderAvatar: respondingAgent.avatar,
+          content: randomResponse,
+          timestamp: Date.now(),
+          isUser: false
+        };
+
+        setActiveMeeting(prev => {
+          if (!prev) return null;
+          return { ...prev, messages: [...prev.messages, agentMessage] };
+        });
+      }
+    }, 1000 + Math.random() * 2000);
+  }, [chatInput, activeMeeting, agents, selectedParticipants]);
+
+  const endMeeting = useCallback(() => {
+    if (!activeMeeting) return;
+
+    addLogEntry(`📅 Meeting ended: "${activeMeeting.topic}"`);
+
+    // Return agents to their desks
+    setAgents(prev => prev.map(agent => {
+      if (activeMeeting.participants.includes(agent.id)) {
+        const zones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
+        return {
+          ...agent,
+          targetX: zones[agent.zone].x + agent.deskOffset.x,
+          targetY: zones[agent.zone].y + agent.deskOffset.y,
+          isWorking: false
+        };
+      }
+      return agent;
+    }));
+
+    setActiveMeeting(null);
+    setMeetingTopic('');
+    setSelectedParticipants([]);
+    setShowMeetingRoom(false);
+  }, [activeMeeting, addLogEntry, calculateZones]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -555,6 +717,7 @@ const OfficeCanvas: React.FC = () => {
 
       <div className="controls">
         <button onClick={() => setShowTaskForm(true)}>📋 New Task</button>
+        <button onClick={() => setShowMeetingRoom(true)}>📅 Meeting Room</button>
         <button onClick={togglePause}>{isPaused ? '▶️ Resume' : '⏸️ Pause'}</button>
         <button onClick={resetOffice}>🔄 Reset</button>
       </div>
@@ -712,6 +875,140 @@ const OfficeCanvas: React.FC = () => {
                 {tasks.filter(t => t.cost).length === 0 && (
                   <div className="no-tasks">No tasks with cost tracking yet</div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Meeting Room Setup Modal */}
+      {showMeetingRoom && !activeMeeting && (
+        <div className="meeting-overlay" onClick={() => setShowMeetingRoom(false)}>
+          <div className="meeting-setup" onClick={e => e.stopPropagation()}>
+            <div className="meeting-header">
+              <h2>📅 Start a Meeting</h2>
+              <button className="close-btn" onClick={() => setShowMeetingRoom(false)}>✕</button>
+            </div>
+
+            <div className="meeting-form">
+              <div className="form-group">
+                <label>Meeting Topic:</label>
+                <input
+                  type="text"
+                  value={meetingTopic}
+                  onChange={(e) => setMeetingTopic(e.target.value)}
+                  placeholder="e.g., Q1 Planning, Bug Triage, Architecture Review"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Select Participants:</label>
+                <div className="participant-list">
+                  {agents.filter(a => a.id !== 'ceo').map(agent => (
+                    <label key={agent.id} className="participant-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedParticipants.includes(agent.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedParticipants([...selectedParticipants, agent.id]);
+                          } else {
+                            setSelectedParticipants(selectedParticipants.filter(id => id !== agent.id));
+                          }
+                        }}
+                      />
+                      <span className="participant-avatar">{agent.avatar}</span>
+                      <span className="participant-name">{agent.name}</span>
+                      <span className="participant-role">{agent.role}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-buttons">
+                <button onClick={startMeeting} disabled={!meetingTopic || selectedParticipants.length === 0}>
+                  🚀 Start Meeting
+                </button>
+                <button onClick={() => setShowMeetingRoom(false)} className="secondary">
+                  ❌ Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Meeting Chat */}
+      {showMeetingRoom && activeMeeting && (
+        <div className="meeting-overlay">
+          <div className="meeting-room">
+            <div className="meeting-room-header">
+              <div className="meeting-info">
+                <h2>📅 {activeMeeting.topic}</h2>
+                <span className="meeting-participants-count">
+                  {activeMeeting.participants.length} participants
+                </span>
+              </div>
+              <button className="end-meeting-btn" onClick={endMeeting}>
+                🔴 End Meeting
+              </button>
+            </div>
+
+            <div className="meeting-content">
+              <div className="chat-container">
+                <div className="chat-messages">
+                  {activeMeeting.messages.map((msg) => (
+                    <div key={msg.id} className={`chat-message ${msg.isUser ? 'me' : msg.senderId === 'system' ? 'system' : 'agent'}`}>
+                      {msg.senderId !== 'system' && (
+                        <div className="message-avatar">{msg.senderAvatar}</div>
+                      )}
+                      
+                      <div className="message-content">
+                        {msg.senderId !== 'system' && (
+                          <div className="message-sender">{msg.senderName}</div>
+                        )}
+                        <div className="message-text">{msg.content}</div>
+                        <div className="message-time">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div className="chat-input-area">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
+                    placeholder="Type your message..."
+                    className="chat-input"
+                  />
+                  <button onClick={sendChatMessage} className="send-btn" disabled={!chatInput.trim()}>
+                    ➤
+                  </button>
+                </div>
+              </div>
+
+              <div className="meeting-sidebar">
+                <h4>Participants</h4>
+                <div className="meeting-participants-list">
+                  <div className="participant-item me">
+                    <span>👑</span>
+                    <span>You (CEO)</span>
+                  </div>
+                  {activeMeeting.participants.filter(id => id !== 'ceo').map(participantId => {
+                    const agent = agents.find(a => a.id === participantId);
+                    return agent ? (
+                      <div key={participantId} className="participant-item">
+                        <span>{agent.avatar}</span>
+                        <span>{agent.name}</span>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
               </div>
             </div>
           </div>
