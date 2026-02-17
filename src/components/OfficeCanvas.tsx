@@ -152,7 +152,7 @@ const ZONES: Record<string, Zone> = {
   reporting: { x: 0.70, y: 0.64, w: 240, h: 140, color: '#54a0ff', label: 'Reporting' },
   engineering: { x: 0.5, y: 0.90, w: 500, h: 170, color: '#1dd1a1', label: 'Engineering Floor' },
   meeting: { x: 0.5, y: 0.52, w: 160, h: 100, color: '#a29bfe', label: 'Meeting Room' },
-  watercooler: { x: 0.5, y: 0.78, w: 60, h: 60, color: '#74b9ff', label: '' }
+  watercooler: { x: 0.5, y: 0.65, w: 50, h: 50, color: '#74b9ff', label: '' }
 };
 
 const INITIAL_AGENTS: Agent[] = [
