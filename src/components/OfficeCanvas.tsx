@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import './OfficeCanvas.css';
+import { callAI } from '../api/ai';
 
 interface Agent {
   id: string;
@@ -379,103 +380,59 @@ const OfficeCanvas: React.FC = () => {
     setChatInput('');
     scrollToBottom();
 
-    // Check if OpenClaw is a participant and send real message
-    const openclawParticipant = agents.find(a => a.id === 'ops' && selectedParticipants.includes('ops'));
-    if (openclawParticipant && activeMeeting) {
-      try {
-        const sendResponse = await fetch('http://localhost:3001/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: chatInput.trim(),
-            meetingTopic: activeMeeting.topic,
-            participantId: 'ops'
-          })
-        });
-        
-        if (sendResponse.ok) {
-          const data = await sendResponse.json();
-          
-          if (data.requestId) {
-            // Poll for response
-            const pollForResponse = async () => {
-              const maxAttempts = 60; // 60 seconds max
-              for (let i = 0; i < maxAttempts; i++) {
-                await new Promise(r => setTimeout(r, 1000)); // Wait 1 second
-                
-                const pollResponse = await fetch(`http://localhost:3001/api/response/${data.requestId}`);
-                const pollData = await pollResponse.json();
-                
-                if (pollData.status === 'complete') {
-                  const agentMessage: ChatMessage = {
-                    id: `msg-${Date.now()}`,
-                    senderId: 'ops',
-                    senderName: openclawParticipant.name,
-                    senderAvatar: openclawParticipant.avatar,
-                    content: pollData.content,
-                    timestamp: Date.now(),
-                    isUser: false
-                  };
+    // Get AI responses from all participants
+    for (const participantId of selectedParticipants) {
+      const agent = agents.find(a => a.id === participantId);
+      if (!agent) continue;
 
-                  setActiveMeeting(prev => {
-                    if (!prev) return null;
-                    return { ...prev, messages: [...prev.messages, agentMessage] };
-                  });
-                  scrollToBottom();
-                  return;
-                }
-              }
-              
-              // Timeout - add fallback message
-              const timeoutMessage: ChatMessage = {
-                id: `msg-${Date.now()}`,
-                senderId: 'ops',
-                senderName: openclawParticipant.name,
-                senderAvatar: openclawParticipant.avatar,
-                content: "I'm taking a while to respond... let me think about that.",
-                timestamp: Date.now(),
-                isUser: false
-              };
-              setActiveMeeting(prev => {
-                if (!prev) return null;
-                return { ...prev, messages: [...prev.messages, timeoutMessage] };
-              });
-            };
-            
-            pollForResponse();
-          } else if (data.content) {
-            // Immediate response (fallback)
-            const agentMessage: ChatMessage = {
-              id: `msg-${Date.now()}`,
-              senderId: 'ops',
-              senderName: openclawParticipant.name,
-              senderAvatar: openclawParticipant.avatar,
-              content: data.content,
-              timestamp: Date.now(),
-              isUser: false
-            };
-            setActiveMeeting(prev => {
-              if (!prev) return null;
-              return { ...prev, messages: [...prev.messages, agentMessage] };
-            });
-            scrollToBottom();
-          }
-        }
-      } catch (error) {
-        console.error('Failed to get OpenClaw response:', error);
-        // Fallback to simulated response
-        const fallbackMessage: ChatMessage = {
-          id: `msg-${Date.now()}`,
-          senderId: 'ops',
-          senderName: openclawParticipant.name,
-          senderAvatar: openclawParticipant.avatar,
-          content: "I'm having trouble connecting right now. Let me get back to you on that.",
+      try {
+        // Build message history for context
+        const messageHistory: { role: 'user' | 'assistant'; content: string }[] = activeMeeting.messages.map(m => ({
+          role: m.isUser ? 'user' : 'assistant',
+          content: `${m.senderName}: ${m.content}`
+        }));
+
+        // Call the AI API directly
+        const response = await callAI(participantId, [
+          ...messageHistory,
+          { role: 'user' as 'user', content: chatInput.trim() }
+        ]);
+
+        const agentMessage: ChatMessage = {
+          id: `msg-${Date.now()}-${participantId}`,
+          senderId: participantId,
+          senderName: agent.name,
+          senderAvatar: agent.avatar,
+          content: response.content,
           timestamp: Date.now(),
           isUser: false
         };
+
         setActiveMeeting(prev => {
           if (!prev) return null;
-          return { ...prev, messages: [...prev.messages, fallbackMessage] };
+          return { ...prev, messages: [...prev.messages, agentMessage] };
+        });
+        scrollToBottom();
+
+        // Small delay between responses
+        await new Promise(r => setTimeout(r, 500));
+
+      } catch (error) {
+        console.error(`Failed to get response from ${agent.name}:`, error);
+        
+        const errorMessage: ChatMessage = {
+          id: `msg-${Date.now()}-${participantId}`,
+          senderId: participantId,
+          senderName: agent.name,
+          senderAvatar: agent.avatar,
+          content: `Sorry, I couldn't respond right now. ${error instanceof Error ? error.message : 'API error'}`,
+          timestamp: Date.now(),
+          isUser: false
+        };
+
+        setActiveMeeting(prev => {
+          if (!prev) return null;
+          return { ...prev, messages: [...prev.messages, errorMessage] };
         });
       }
     }
