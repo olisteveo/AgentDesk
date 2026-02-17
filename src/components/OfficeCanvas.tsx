@@ -522,19 +522,15 @@ const OfficeCanvas: React.FC = () => {
     };
 
     const drawZoneLabel = (zone: Zone) => {
-      const deskW = zone.w;
-      const x = zone.x - deskW/2;
-      const y = zone.y - zone.h/2;
-
-      // Label background at top of desk
+      // Label positioned ABOVE the desk
       ctx.fillStyle = 'rgba(0,0,0,0.85)';
-      ctx.fillRect(x + 10, y + 8, deskW - 20, 32);
+      ctx.fillRect(zone.x - 80, zone.y - zone.h/2 - 45, 160, 32);
 
       // Label text
       ctx.fillStyle = zone.color;
       ctx.font = 'bold 13px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(zone.label, zone.x, y + 30);
+      ctx.fillText(zone.label, zone.x, zone.y - zone.h/2 - 23);
     };
 
     const drawWaterCooler = (x: number, y: number) => {
