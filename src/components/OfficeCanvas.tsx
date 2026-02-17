@@ -1128,7 +1128,7 @@ const OfficeCanvas: React.FC = () => {
           <div className="whiteboard" onClick={e => e.stopPropagation()}>
             <div className="whiteboard-header">
               <h2>Strategy Whiteboard</h2>
-              <button className="close-btn" onClick={() => setShowWhiteboard(false)}>Close</button>
+              <button className="close-x" onClick={() => setShowWhiteboard(false)}>×</button>
             </div>
             
             {/* Tabs */}
@@ -1140,6 +1140,9 @@ const OfficeCanvas: React.FC = () => {
                   onClick={() => setActiveTab(tab)}
                 >
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  {tab !== 'history' && (
+                    <span className="tab-count">{whiteboardNotes[tab]?.length || 0}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -1147,7 +1150,6 @@ const OfficeCanvas: React.FC = () => {
             <div className="whiteboard-canvas">
               {activeTab === 'history' ? (
                 <div className="session-history-panel">
-                  <h3>Session History</h3>
                   <div className="history-list">
                     {taskLog.map((entry, i) => (
                       <div key={i} className="history-entry">{entry}</div>
