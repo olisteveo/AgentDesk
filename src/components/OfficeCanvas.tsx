@@ -143,8 +143,8 @@ const DEFAULT_SUBSCRIPTIONS: Subscription[] = [
 ];
 
 const ZONES: Record<string, Zone> = {
-  ceo: { x: 0.5, y: 0.08, w: 220, h: 130, color: '#ffd700', label: '👑 CEO Office' },
-  ops: { x: 0.5, y: 0.32, w: 200, h: 110, color: '#ff6b6b', label: '🦅 Operations' },
+  ceo: { x: 0.28, y: 0.10, w: 200, h: 120, color: '#ffd700', label: '👑 CEO Office' },
+  ops: { x: 0.72, y: 0.10, w: 200, h: 120, color: '#ff6b6b', label: '🦅 Operations' },
   creative: { x: 0.15, y: 0.55, w: 260, h: 160, color: '#feca57', label: '🍌 Nano Banana Studio' },
   research: { x: 0.85, y: 0.55, w: 240, h: 160, color: '#48dbfb', label: '🔬 Research Lab' },
   engineering: { x: 0.5, y: 0.82, w: 600, h: 200, color: '#1dd1a1', label: '💻 Engineering Floor' },
