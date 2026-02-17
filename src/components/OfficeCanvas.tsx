@@ -156,15 +156,15 @@ const AVAILABLE_MODELS = [
 
 // Default desk configuration - users can customize this
 const DEFAULT_DESKS: Zone[] = [
-  { id: 'ceo', x: 0.35, y: 0.18, w: 200, h: 110, color: '#ffd700', label: 'CEO Office' },
-  { id: 'ops', x: 0.65, y: 0.18, w: 200, h: 110, color: '#ff6b6b', label: 'Operations' },
-  { id: 'desk1', x: 0.30, y: 0.40, w: 220, h: 130, color: '#feca57', label: 'Desk 1' },
-  { id: 'desk2', x: 0.70, y: 0.40, w: 220, h: 130, color: '#48dbfb', label: 'Desk 2' },
-  { id: 'desk3', x: 0.30, y: 0.62, w: 220, h: 130, color: '#ff9ff3', label: 'Desk 3' },
-  { id: 'desk4', x: 0.70, y: 0.62, w: 220, h: 130, color: '#54a0ff', label: 'Desk 4' },
-  { id: 'engineering', x: 0.5, y: 0.88, w: 480, h: 160, color: '#1dd1a1', label: 'Engineering Floor' },
-  { id: 'meeting', x: 0.5, y: 0.52, w: 160, h: 100, color: '#a29bfe', label: 'Meeting Room' },
-  { id: 'watercooler', x: 0.5, y: 0.65, w: 50, h: 50, color: '#74b9ff', label: '' }
+  { id: 'ceo', x: 0.35, y: 0.12, w: 180, h: 100, color: '#ffd700', label: 'CEO Office' },
+  { id: 'ops', x: 0.65, y: 0.12, w: 180, h: 100, color: '#ff6b6b', label: 'Operations' },
+  { id: 'desk1', x: 0.22, y: 0.35, w: 200, h: 120, color: '#feca57', label: 'Desk 1' },
+  { id: 'desk2', x: 0.50, y: 0.35, w: 200, h: 120, color: '#48dbfb', label: 'Desk 2' },
+  { id: 'desk3', x: 0.78, y: 0.35, w: 200, h: 120, color: '#ff9ff3', label: 'Desk 3' },
+  { id: 'desk4', x: 0.22, y: 0.58, w: 200, h: 120, color: '#54a0ff', label: 'Desk 4' },
+  { id: 'desk5', x: 0.50, y: 0.58, w: 200, h: 120, color: '#1dd1a1', label: 'Desk 5' },
+  { id: 'desk6', x: 0.78, y: 0.58, w: 200, h: 120, color: '#a29bfe', label: 'Desk 6' },
+  { id: 'meeting', x: 0.5, y: 0.82, w: 300, h: 140, color: '#74b9ff', label: 'Meeting Room' }
 ];
 
 // Desk to model assignments - users configure this
@@ -175,19 +175,17 @@ interface DeskAssignment {
 }
 
 const DEFAULT_ASSIGNMENTS: DeskAssignment[] = [
-  { deskId: 'desk1', modelId: 'claude-sonnet-4', customName: 'Research Desk' },
-  { deskId: 'desk2', modelId: 'kimi-k2.5', customName: 'Dev Desk' },
-  { deskId: 'desk3', modelId: 'gpt-4.1', customName: 'Writing Desk' },
-  { deskId: 'desk4', modelId: 'nano-banana', customName: 'Creative Desk' }
+  { deskId: 'desk1', modelId: 'claude-opus-4.6', customName: 'Research Desk' },
+  { deskId: 'desk2', modelId: 'claude-sonnet-4', customName: 'Writing Desk' },
+  { deskId: 'desk3', modelId: 'kimi-k2.5', customName: 'Dev Desk' },
+  { deskId: 'desk4', modelId: 'gpt-4.1', customName: 'Analysis Desk' },
+  { deskId: 'desk5', modelId: 'codex', customName: 'Code Desk' },
+  { deskId: 'desk6', modelId: 'nano-banana', customName: 'Creative Desk' }
 ];
 
 const INITIAL_AGENTS: Agent[] = [
-  { id: 'ceo', name: 'You', role: 'CEO', zone: 'ceo', x: 0, y: 0, color: '#ffd700', emoji: '👑', avatar: '👔', deskOffset: { x: 0, y: 10 }, isWorking: false },
-  { id: 'ops', name: 'OpenClaw', role: 'Operations Manager', zone: 'ops', x: 0, y: 0, color: '#ff6b6b', emoji: '🦅', avatar: '📊', deskOffset: { x: 0, y: 10 }, isWorking: false },
-  { id: 'dev1', name: 'Claude Opus', role: 'Senior Developer', zone: 'engineering', x: 0, y: 0, color: '#1dd1a1', emoji: '💻', avatar: '⚡', deskOffset: { x: -140, y: 25 }, isWorking: false },
-  { id: 'dev2', name: 'Codex', role: 'Senior Developer', zone: 'engineering', x: 0, y: 0, color: '#1dd1a1', emoji: '⚡', avatar: '🔧', deskOffset: { x: -48, y: 25 }, isWorking: false },
-  { id: 'dev3', name: 'Kimi K2.5', role: 'Developer', zone: 'engineering', x: 0, y: 0, color: '#1dd1a1', emoji: '🎯', avatar: '🚀', deskOffset: { x: 48, y: 25 }, isWorking: false },
-  { id: 'dev4', name: 'GPT 4.1', role: 'Junior Developer', zone: 'engineering', x: 0, y: 0, color: '#1dd1a1', emoji: '🌱', avatar: '📖', deskOffset: { x: 140, y: 25 }, isWorking: false }
+  { id: 'ceo', name: 'You', role: 'CEO', zone: 'ceo', x: 0, y: 0, color: '#ffd700', emoji: '', avatar: '', deskOffset: { x: 0, y: 10 }, isWorking: false },
+  { id: 'ops', name: 'OpenClaw', role: 'Operations Manager', zone: 'ops', x: 0, y: 0, color: '#ff6b6b', emoji: '', avatar: '', deskOffset: { x: 0, y: 10 }, isWorking: false }
 ];
 
 const OfficeCanvas: React.FC = () => {
