@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import './OfficeCanvas.css';
-import { callAI } from '../api/ai';
 
 interface Agent {
   id: string;
@@ -380,63 +379,28 @@ const OfficeCanvas: React.FC = () => {
     setChatInput('');
     scrollToBottom();
 
-    // Get AI responses from all participants
-    for (const participantId of selectedParticipants) {
-      const agent = agents.find(a => a.id === participantId);
-      if (!agent) continue;
-
-      try {
-        // Build message history for context
-        const messageHistory: { role: 'user' | 'assistant'; content: string }[] = activeMeeting.messages.map(m => ({
-          role: m.isUser ? 'user' : 'assistant',
-          content: `${m.senderName}: ${m.content}`
-        }));
-
-        // Call the AI API directly
-        const response = await callAI(participantId, [
-          ...messageHistory,
-          { role: 'user' as 'user', content: chatInput.trim() }
-        ]);
-
-        const agentMessage: ChatMessage = {
-          id: `msg-${Date.now()}-${participantId}`,
-          senderId: participantId,
-          senderName: agent.name,
-          senderAvatar: agent.avatar,
-          content: response.content,
+    // TODO: Connect to local OpenClaw when available
+    // For now, show a placeholder that OpenClaw integration is coming
+    
+    if (selectedParticipants.includes('ops')) {
+      setTimeout(() => {
+        const placeholderMessage: ChatMessage = {
+          id: `msg-${Date.now()}-ops`,
+          senderId: 'ops',
+          senderName: 'OpenClaw',
+          senderAvatar: '🦅',
+          content: "👋 I'm OpenClaw! I'll be able to help you when running locally on your Mac Mini. For now, this is a preview of the meeting room.",
           timestamp: Date.now(),
           isUser: false
         };
-
         setActiveMeeting(prev => {
           if (!prev) return null;
-          return { ...prev, messages: [...prev.messages, agentMessage] };
+          return { ...prev, messages: [...prev.messages, placeholderMessage] };
         });
         scrollToBottom();
-
-        // Small delay between responses
-        await new Promise(r => setTimeout(r, 500));
-
-      } catch (error) {
-        console.error(`Failed to get response from ${agent.name}:`, error);
-        
-        const errorMessage: ChatMessage = {
-          id: `msg-${Date.now()}-${participantId}`,
-          senderId: participantId,
-          senderName: agent.name,
-          senderAvatar: agent.avatar,
-          content: `Sorry, I couldn't respond right now. ${error instanceof Error ? error.message : 'API error'}`,
-          timestamp: Date.now(),
-          isUser: false
-        };
-
-        setActiveMeeting(prev => {
-          if (!prev) return null;
-          return { ...prev, messages: [...prev.messages, errorMessage] };
-        });
-      }
+      }, 500);
     }
-  }, [chatInput, activeMeeting, agents, selectedParticipants, scrollToBottom]);
+  }, [chatInput, activeMeeting, selectedParticipants, scrollToBottom]);
 
   const endMeeting = useCallback(() => {
     if (!activeMeeting) return;
