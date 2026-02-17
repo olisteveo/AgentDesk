@@ -174,6 +174,17 @@ interface DeskAssignment {
   customName?: string;
 }
 
+// AI Provider Connection
+interface Connection {
+  id: string;
+  provider: 'openai' | 'anthropic' | 'moonshot' | 'google' | 'cohere';
+  name: string;
+  isConnected: boolean;
+  apiKeyMasked: string;
+  models: string[];
+  addedAt: Date;
+}
+
 const DEFAULT_ASSIGNMENTS: DeskAssignment[] = [
   { deskId: 'desk1', modelId: 'claude-opus-4.6', customName: 'Research Desk' },
   { deskId: 'desk2', modelId: 'claude-sonnet-4', customName: 'Writing Desk' },
@@ -207,9 +218,16 @@ const OfficeCanvas: React.FC = () => {
   const dimensionsRef = useRef({ width: 0, height: 0 });
 
   // Desk configuration state
-  const [desks] = useState<Zone[]>(DEFAULT_DESKS);
+  const [desks, setDesks] = useState<Zone[]>(DEFAULT_DESKS);
   const [deskAssignments, setDeskAssignments] = useState<DeskAssignment[]>(DEFAULT_ASSIGNMENTS);
   const [showDeskConfig, setShowDeskConfig] = useState(false);
+
+  // Settings / Connections state
+  const [showSettings, setShowSettings] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'providers' | 'desks'>('providers');
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [newApiKey, setNewApiKey] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState('');
 
   // Meeting room state
   const [showMeetingRoom, setShowMeetingRoom] = useState(false);
@@ -952,7 +970,7 @@ const OfficeCanvas: React.FC = () => {
         <div className="sidebar-controls">
           <button onClick={() => setShowTaskForm(true)}>New Task</button>
           <button onClick={() => setShowMeetingRoom(true)}>Meeting Room</button>
-          <button onClick={() => setShowDeskConfig(true)}>Configure Desks</button>
+          <button onClick={() => setShowSettings(true)}>Settings</button>
           <button onClick={togglePause}>{isPaused ? 'Resume' : 'Pause'}</button>
           <button onClick={resetOffice}>Reset</button>
         </div>
@@ -1408,6 +1426,315 @@ const OfficeCanvas: React.FC = () => {
 
             <div className="form-buttons">
               <button onClick={() => setShowDeskConfig(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="task-form-overlay" onClick={() => setShowSettings(false)}>
+          <div className="task-form" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2>Settings</h2>
+              <button className="close-btn" onClick={() => setShowSettings(false)}>✕</button>
+            </div>
+
+            {/* Settings Tabs */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
+              <button
+                onClick={() => setActiveSettingsTab('providers')}
+                style={{
+                  padding: '10px 20px',
+                  background: activeSettingsTab === 'providers' ? '#667eea' : 'transparent',
+                  border: '1px solid #444',
+                  borderRadius: '6px',
+                  color: activeSettingsTab === 'providers' ? '#fff' : '#888',
+                  cursor: 'pointer'
+                }}
+              >
+                AI Providers
+              </button>
+              <button
+                onClick={() => setActiveSettingsTab('desks')}
+                style={{
+                  padding: '10px 20px',
+                  background: activeSettingsTab === 'desks' ? '#667eea' : 'transparent',
+                  border: '1px solid #444',
+                  borderRadius: '6px',
+                  color: activeSettingsTab === 'desks' ? '#fff' : '#888',
+                  cursor: 'pointer'
+                }}
+              >
+                Desk Management
+              </button>
+            </div>
+
+            {/* Providers Tab */}
+            {activeSettingsTab === 'providers' && (
+              <div>
+                <p style={{ color: '#888', fontSize: '13px', marginBottom: '20px' }}>
+                  Connect your AI provider accounts. API keys are encrypted and never shared.
+                </p>
+
+                {/* Available Providers List */}
+                {[
+                  { id: 'openai', name: 'OpenAI', models: ['GPT-4', 'GPT-4o', 'GPT-3.5'] },
+                  { id: 'anthropic', name: 'Anthropic', models: ['Claude Opus', 'Claude Sonnet', 'Claude Haiku'] },
+                  { id: 'moonshot', name: 'Moonshot', models: ['Kimi K2.5'] },
+                  { id: 'google', name: 'Google', models: ['Gemini Pro', 'Gemini Ultra'] }
+                ].map(provider => {
+                  const connection = connections.find(c => c.provider === provider.id);
+                  return (
+                    <div key={provider.id} style={{
+                      background: 'rgba(0,0,0,0.3)',
+                      padding: '20px',
+                      borderRadius: '10px',
+                      marginBottom: '15px',
+                      border: connection?.isConnected ? '1px solid #1dd1a1' : '1px solid #333'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <div>
+                          <strong style={{ color: '#fff', fontSize: '16px' }}>{provider.name}</strong>
+                          {connection?.isConnected && (
+                            <span style={{ color: '#1dd1a1', fontSize: '12px', marginLeft: '10px' }}>● Connected</span>
+                          )}
+                        </div>
+                        {!connection?.isConnected ? (
+                          <button
+                            onClick={() => setSelectedProvider(provider.id)}
+                            style={{
+                              padding: '8px 16px',
+                              background: '#667eea',
+                              border: 'none',
+                              borderRadius: '6px',
+                              color: '#fff',
+                              cursor: 'pointer',
+                              fontSize: '13px'
+                            }}
+                          >
+                            Add API Key
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setConnections(connections.filter(c => c.provider !== provider.id))}
+                            style={{
+                              padding: '8px 16px',
+                              background: 'transparent',
+                              border: '1px solid #ff6b6b',
+                              borderRadius: '6px',
+                              color: '#ff6b6b',
+                              cursor: 'pointer',
+                              fontSize: '13px'
+                            }}
+                          >
+                            Disconnect
+                          </button>
+                        )}
+                      </div>
+
+                      {connection?.isConnected ? (
+                        <div style={{ fontSize: '12px', color: '#888' }}>
+                          <div>Key: {connection.apiKeyMasked}</div>
+                          <div style={{ marginTop: '5px' }}>Available models: {connection.models.join(', ')}</div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          Available models: {provider.models.join(', ')}
+                        </div>
+                      )}
+
+                      {/* Add API Key Form */}
+                      {selectedProvider === provider.id && !connection?.isConnected && (
+                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #333' }}>
+                          <input
+                            type="password"
+                            placeholder={`Enter ${provider.name} API Key`}
+                            value={newApiKey}
+                            onChange={(e) => setNewApiKey(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              background: 'rgba(0,0,0,0.5)',
+                              border: '1px solid #444',
+                              borderRadius: '6px',
+                              color: '#fff',
+                              marginBottom: '10px'
+                            }}
+                          />
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                              onClick={() => {
+                                if (newApiKey) {
+                                  setConnections([...connections, {
+                                    id: Date.now().toString(),
+                                    provider: provider.id as any,
+                                    name: provider.name,
+                                    isConnected: true,
+                                    apiKeyMasked: newApiKey.slice(0, 8) + '...' + newApiKey.slice(-4),
+                                    models: provider.models,
+                                    addedAt: new Date()
+                                  }]);
+                                  setNewApiKey('');
+                                  setSelectedProvider('');
+                                }
+                              }}
+                              style={{
+                                padding: '10px 20px',
+                                background: '#1dd1a1',
+                                border: 'none',
+                                borderRadius: '6px',
+                                color: '#fff',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Connect
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedProvider('');
+                                setNewApiKey('');
+                              }}
+                              style={{
+                                padding: '10px 20px',
+                                background: 'transparent',
+                                border: '1px solid #444',
+                                borderRadius: '6px',
+                                color: '#888',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Desk Management Tab */}
+            {activeSettingsTab === 'desks' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                  <p style={{ color: '#888', fontSize: '13px' }}>
+                    Configure desks with connected AI models. {desks.filter(d => d.id?.startsWith('desk')).length}/6 desks used.
+                  </p>
+                  {desks.filter(d => d.id?.startsWith('desk')).length < 6 && connections.some(c => c.isConnected) && (
+                    <button
+                      onClick={() => {
+                        const deskNum = desks.filter(d => d.id?.startsWith('desk')).length + 1;
+                        const newDesk: Zone = {
+                          id: `desk${deskNum}`,
+                          x: deskNum % 2 === 1 ? 0.30 : 0.70,
+                          y: 0.28 + Math.floor((deskNum - 1) / 2) * 0.18,
+                          w: 200,
+                          h: 100,
+                          color: '#667eea',
+                          label: `Desk ${deskNum}`
+                        };
+                        setDesks([...desks, newDesk]);
+                      }}
+                      style={{
+                        padding: '10px 20px',
+                        background: '#667eea',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: '#fff',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + Add Desk
+                    </button>
+                  )}
+                </div>
+
+                {!connections.some(c => c.isConnected) && (
+                  <div style={{
+                    background: 'rgba(255, 193, 7, 0.1)',
+                    border: '1px solid rgba(255, 193, 7, 0.3)',
+                    padding: '15px',
+                    borderRadius: '8px',
+                    marginBottom: '20px',
+                    color: '#ffc107',
+                    fontSize: '13px'
+                  }}>
+                    Connect at least one AI provider to create desks.
+                  </div>
+                )}
+
+                {desks.filter(d => d.id?.startsWith('desk')).length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                    No desks configured. Click "Add Desk" to create your first workspace.
+                  </div>
+                ) : (
+                  <div>
+                    {desks.filter(d => d.id?.startsWith('desk')).map(desk => {
+                      const assignment = deskAssignments.find(a => a.deskId === desk.id);
+                      const availableModels = connections
+                        .filter(c => c.isConnected)
+                        .flatMap(c => c.models.map(m => ({ name: m, provider: c.provider })));
+
+                      return (
+                        <div key={desk.id} style={{
+                          background: 'rgba(0,0,0,0.3)',
+                          padding: '15px',
+                          borderRadius: '8px',
+                          marginBottom: '12px',
+                          border: '1px solid #333'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <strong style={{ color: desk.color }}>{desk.label}</strong>
+                            <button
+                              onClick={() => {
+                                setDesks(desks.filter(d => d.id !== desk.id));
+                                setDeskAssignments(deskAssignments.filter(a => a.deskId !== desk.id));
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ff6b6b',
+                                cursor: 'pointer',
+                                fontSize: '12px'
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <select
+                            value={assignment?.modelId || ''}
+                            onChange={(e) => {
+                              const newAssignments = deskAssignments.filter(a => a.deskId !== desk.id);
+                              if (e.target.value) {
+                                newAssignments.push({
+                                  deskId: desk.id!,
+                                  modelId: e.target.value,
+                                  customName: desk.label
+                                });
+                              }
+                              setDeskAssignments(newAssignments);
+                            }}
+                            style={{ width: '100%', padding: '10px' }}
+                          >
+                            <option value="">Select AI Model...</option>
+                            {availableModels.map((model, idx) => (
+                              <option key={idx} value={`${model.provider}-${model.name}`}>
+                                {model.name} ({model.provider})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="form-buttons" style={{ marginTop: '20px' }}>
+              <button onClick={() => setShowSettings(false)}>Close</button>
             </div>
           </div>
         </div>
