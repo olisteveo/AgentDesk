@@ -359,7 +359,7 @@ const OfficeCanvas: React.FC = () => {
     }, 500);
   }, [meetingTopic, selectedParticipants, addLogEntry, calculateZones]);
 
-  const sendChatMessage = useCallback(() => {
+  const sendChatMessage = useCallback(async () => {
     if (!chatInput.trim() || !activeMeeting) return;
 
     const newMessage: ChatMessage = {
@@ -379,41 +379,58 @@ const OfficeCanvas: React.FC = () => {
     setChatInput('');
     scrollToBottom();
 
-    // Simulate agent responses
-    setTimeout(() => {
-      const respondingAgent = agents.find(a => selectedParticipants.includes(a.id) && a.id !== 'user');
-      if (respondingAgent && Math.random() > 0.3) {
-        const responses = [
-          "That's a great point! I agree with that approach.",
-          "Interesting idea. Let me think about how we could implement that.",
-          "I have some concerns about the timeline. Can we discuss that?",
-          "This aligns well with our goals. I'm on board!",
-          "Could you elaborate on that? I want to make sure I understand.",
-          "From my perspective, we should prioritize this differently.",
-          "I've worked on something similar before. Here's what I learned...",
-          "Good suggestion! I'll look into the technical feasibility.",
-          "Let's make sure we're not overcomplicating this.",
-          "I can take ownership of this task if needed."
-        ];
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+    // Check if OpenClaw is a participant and send real message
+    const openclawParticipant = agents.find(a => a.id === 'ops' && selectedParticipants.includes('ops'));
+    if (openclawParticipant && activeMeeting) {
+      try {
+        const response = await fetch('http://localhost:3001/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: chatInput.trim(),
+            meetingTopic: activeMeeting.topic,
+            participantId: 'ops'
+          })
+        });
         
-        const agentMessage: ChatMessage = {
+        if (response.ok) {
+          const data = await response.json();
+          
+          const agentMessage: ChatMessage = {
+            id: `msg-${Date.now()}`,
+            senderId: 'ops',
+            senderName: openclawParticipant.name,
+            senderAvatar: openclawParticipant.avatar,
+            content: data.content,
+            timestamp: Date.now(),
+            isUser: false
+          };
+
+          setActiveMeeting(prev => {
+            if (!prev) return null;
+            return { ...prev, messages: [...prev.messages, agentMessage] };
+          });
+          scrollToBottom();
+        }
+      } catch (error) {
+        console.error('Failed to get OpenClaw response:', error);
+        // Fallback to simulated response
+        const fallbackMessage: ChatMessage = {
           id: `msg-${Date.now()}`,
-          senderId: respondingAgent.id,
-          senderName: respondingAgent.name,
-          senderAvatar: respondingAgent.avatar,
-          content: randomResponse,
+          senderId: 'ops',
+          senderName: openclawParticipant.name,
+          senderAvatar: openclawParticipant.avatar,
+          content: "I'm having trouble connecting right now. Let me get back to you on that.",
           timestamp: Date.now(),
           isUser: false
         };
-
         setActiveMeeting(prev => {
           if (!prev) return null;
-          return { ...prev, messages: [...prev.messages, agentMessage] };
+          return { ...prev, messages: [...prev.messages, fallbackMessage] };
         });
       }
-    }, 1000 + Math.random() * 2000);
-  }, [chatInput, activeMeeting, agents, selectedParticipants]);
+    }
+  }, [chatInput, activeMeeting, agents, selectedParticipants, scrollToBottom]);
 
   const endMeeting = useCallback(() => {
     if (!activeMeeting) return;
