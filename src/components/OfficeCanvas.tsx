@@ -383,7 +383,7 @@ const OfficeCanvas: React.FC = () => {
     const openclawParticipant = agents.find(a => a.id === 'ops' && selectedParticipants.includes('ops'));
     if (openclawParticipant && activeMeeting) {
       try {
-        const response = await fetch('http://localhost:3001/api/chat', {
+        const sendResponse = await fetch('http://localhost:3001/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -393,24 +393,73 @@ const OfficeCanvas: React.FC = () => {
           })
         });
         
-        if (response.ok) {
-          const data = await response.json();
+        if (sendResponse.ok) {
+          const data = await sendResponse.json();
           
-          const agentMessage: ChatMessage = {
-            id: `msg-${Date.now()}`,
-            senderId: 'ops',
-            senderName: openclawParticipant.name,
-            senderAvatar: openclawParticipant.avatar,
-            content: data.content,
-            timestamp: Date.now(),
-            isUser: false
-          };
+          if (data.requestId) {
+            // Poll for response
+            const pollForResponse = async () => {
+              const maxAttempts = 60; // 60 seconds max
+              for (let i = 0; i < maxAttempts; i++) {
+                await new Promise(r => setTimeout(r, 1000)); // Wait 1 second
+                
+                const pollResponse = await fetch(`http://localhost:3001/api/response/${data.requestId}`);
+                const pollData = await pollResponse.json();
+                
+                if (pollData.status === 'complete') {
+                  const agentMessage: ChatMessage = {
+                    id: `msg-${Date.now()}`,
+                    senderId: 'ops',
+                    senderName: openclawParticipant.name,
+                    senderAvatar: openclawParticipant.avatar,
+                    content: pollData.content,
+                    timestamp: Date.now(),
+                    isUser: false
+                  };
 
-          setActiveMeeting(prev => {
-            if (!prev) return null;
-            return { ...prev, messages: [...prev.messages, agentMessage] };
-          });
-          scrollToBottom();
+                  setActiveMeeting(prev => {
+                    if (!prev) return null;
+                    return { ...prev, messages: [...prev.messages, agentMessage] };
+                  });
+                  scrollToBottom();
+                  return;
+                }
+              }
+              
+              // Timeout - add fallback message
+              const timeoutMessage: ChatMessage = {
+                id: `msg-${Date.now()}`,
+                senderId: 'ops',
+                senderName: openclawParticipant.name,
+                senderAvatar: openclawParticipant.avatar,
+                content: "I'm taking a while to respond... let me think about that.",
+                timestamp: Date.now(),
+                isUser: false
+              };
+              setActiveMeeting(prev => {
+                if (!prev) return null;
+                return { ...prev, messages: [...prev.messages, timeoutMessage] };
+              });
+            };
+            
+            pollForResponse();
+          } else if (data.content) {
+            // Immediate response (fallback)
+            const agentMessage: ChatMessage = {
+              id: `msg-${Date.now()}`,
+              senderId: 'ops',
+              senderName: openclawParticipant.name,
+              senderAvatar: openclawParticipant.avatar,
+              content: data.content,
+              timestamp: Date.now(),
+              isUser: false
+            };
+            setActiveMeeting(prev => {
+              if (!prev) return null;
+              return { ...prev, messages: [...prev.messages, agentMessage] };
+            });
+            scrollToBottom();
+          }
         }
       } catch (error) {
         console.error('Failed to get OpenClaw response:', error);

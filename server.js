@@ -11,9 +11,9 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// Store pending messages and responses
-const pendingResponses = new Map();
+// Store messages and responses
 const messageQueue = [];
+const responses = new Map(); // requestId -> response content
 
 // Get tunnel URL if available
 function getTunnelUrl() {
@@ -49,44 +49,59 @@ app.post('/api/chat', async (req, res) => {
     message,
     meetingTopic,
     tunnelUrl,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    responded: false
   });
   
-  console.log(`[Chat] Message queued for OpenClaw at ${tunnelUrl}`);
+  console.log(`[Chat] Message queued: ${requestId}`);
   
-  // Store the response promise
-  const responsePromise = new Promise((resolve) => {
-    pendingResponses.set(requestId, resolve);
-    
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      if (pendingResponses.has(requestId)) {
-        pendingResponses.delete(requestId);
-        resolve({
-          content: "I'm thinking about that... could you give me a moment?",
-          senderName: 'OpenClaw',
-          senderAvatar: '🦅'
-        });
-      }
-    }, 30000);
+  // Return immediately with requestId - client will poll for response
+  res.json({
+    requestId,
+    status: 'pending',
+    message: 'Message sent to OpenClaw, waiting for response...'
   });
+});
+
+// Endpoint for client to poll for response
+app.get('/api/response/:requestId', (req, res) => {
+  const { requestId } = req.params;
+  const response = responses.get(requestId);
   
-  // Wait for response (OpenClaw will call /api/respond)
-  const response = await responsePromise;
-  res.json(response);
+  if (response) {
+    responses.delete(requestId); // Clean up
+    res.json({
+      status: 'complete',
+      content: response.content,
+      senderName: response.senderName,
+      senderAvatar: response.senderAvatar
+    });
+  } else {
+    // Check if message is still pending
+    const message = messageQueue.find(m => m.requestId === requestId);
+    if (message) {
+      res.json({ status: 'pending' });
+    } else {
+      res.json({ status: 'not_found' });
+    }
+  }
 });
 
 // Endpoint for OpenClaw to check for new messages
 app.get('/api/messages', (req, res) => {
-  // Return messages but keep them for 5 seconds before clearing
-  // This prevents race conditions with polling
-  const messages = [...messageQueue];
-  res.json(messages);
-  
-  // Clear queue after a short delay
-  setTimeout(() => {
-    messageQueue.length = 0;
-  }, 5000);
+  // Return only unresponded messages
+  const unresponded = messageQueue.filter(m => !m.responded);
+  res.json(unresponded);
+});
+
+// Endpoint for OpenClaw to mark message as responded (optional cleanup)
+app.post('/api/messages/:requestId/ack', (req, res) => {
+  const { requestId } = req.params;
+  const message = messageQueue.find(m => m.requestId === requestId);
+  if (message) {
+    message.responded = true;
+  }
+  res.json({ success: true });
 });
 
 // Endpoint for OpenClaw to post responses
@@ -95,18 +110,20 @@ app.post('/api/respond', (req, res) => {
   
   console.log(`[Response] OpenClaw responded to ${requestId}: ${content}`);
   
-  const resolve = pendingResponses.get(requestId);
-  if (resolve) {
-    resolve({ 
-      content, 
-      senderName: 'OpenClaw', 
-      senderAvatar: '🦅' 
-    });
-    pendingResponses.delete(requestId);
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: 'Request not found or timed out' });
+  // Store the response
+  responses.set(requestId, {
+    content,
+    senderName: 'OpenClaw',
+    senderAvatar: '🦅'
+  });
+  
+  // Mark message as responded
+  const message = messageQueue.find(m => m.requestId === requestId);
+  if (message) {
+    message.responded = true;
   }
+  
+  res.json({ success: true });
 });
 
 // Health check endpoint
@@ -115,9 +132,30 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     tunnelUrl: tunnelUrl || null,
-    hasTunnel: !!tunnelUrl
+    hasTunnel: !!tunnelUrl,
+    pendingMessages: messageQueue.filter(m => !m.responded).length
   });
 });
+
+// Cleanup old messages every minute
+setInterval(() => {
+  const now = Date.now();
+  const cutoff = now - 5 * 60 * 1000; // 5 minutes
+  
+  // Remove old messages from queue
+  for (let i = messageQueue.length - 1; i >= 0; i--) {
+    if (messageQueue[i].timestamp < cutoff) {
+      messageQueue.splice(i, 1);
+    }
+  }
+  
+  // Remove old responses
+  for (const [requestId, response] of responses.entries()) {
+    if (response.timestamp < cutoff) {
+      responses.delete(requestId);
+    }
+  }
+}, 60000);
 
 app.listen(PORT, () => {
   console.log(`🚀 Chat bridge server running on http://localhost:${PORT}`);
