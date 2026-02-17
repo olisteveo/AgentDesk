@@ -144,15 +144,15 @@ const DEFAULT_SUBSCRIPTIONS: Subscription[] = [
 ];
 
 const ZONES: Record<string, Zone> = {
-  ceo: { x: 0.35, y: 0.12, w: 200, h: 110, color: '#ffd700', label: 'CEO Office' },
-  ops: { x: 0.65, y: 0.12, w: 200, h: 110, color: '#ff6b6b', label: 'Operations' },
-  creative: { x: 0.30, y: 0.38, w: 240, h: 140, color: '#feca57', label: 'Creative Studio' },
-  research: { x: 0.70, y: 0.38, w: 240, h: 140, color: '#48dbfb', label: 'Research Lab' },
-  marketing: { x: 0.30, y: 0.62, w: 240, h: 140, color: '#ff9ff3', label: 'Marketing Lab' },
-  reporting: { x: 0.70, y: 0.62, w: 240, h: 140, color: '#54a0ff', label: 'Reporting' },
-  engineering: { x: 0.5, y: 0.88, w: 500, h: 170, color: '#1dd1a1', label: 'Engineering Floor' },
-  meeting: { x: 0.5, y: 0.50, w: 160, h: 100, color: '#a29bfe', label: 'Meeting Room' },
-  watercooler: { x: 0.5, y: 0.75, w: 60, h: 60, color: '#74b9ff', label: '' }
+  ceo: { x: 0.35, y: 0.18, w: 200, h: 110, color: '#ffd700', label: 'CEO Office' },
+  ops: { x: 0.65, y: 0.18, w: 200, h: 110, color: '#ff6b6b', label: 'Operations' },
+  creative: { x: 0.30, y: 0.40, w: 240, h: 140, color: '#feca57', label: 'Creative Studio' },
+  research: { x: 0.70, y: 0.40, w: 240, h: 140, color: '#48dbfb', label: 'Research Lab' },
+  marketing: { x: 0.30, y: 0.64, w: 240, h: 140, color: '#ff9ff3', label: 'Marketing Lab' },
+  reporting: { x: 0.70, y: 0.64, w: 240, h: 140, color: '#54a0ff', label: 'Reporting' },
+  engineering: { x: 0.5, y: 0.90, w: 500, h: 170, color: '#1dd1a1', label: 'Engineering Floor' },
+  meeting: { x: 0.5, y: 0.52, w: 160, h: 100, color: '#a29bfe', label: 'Meeting Room' },
+  watercooler: { x: 0.5, y: 0.78, w: 60, h: 60, color: '#74b9ff', label: '' }
 };
 
 const INITIAL_AGENTS: Agent[] = [
@@ -741,18 +741,24 @@ const OfficeCanvas: React.FC = () => {
 
       const zones = calculateZones(width, height);
 
-      // Draw carpet background
-      const carpetGradient = ctx.createLinearGradient(0, 0, width, height);
-      carpetGradient.addColorStop(0, '#1a1a2e');
-      carpetGradient.addColorStop(0.5, '#16213e');
-      carpetGradient.addColorStop(1, '#1a1a2e');
-      ctx.fillStyle = carpetGradient;
+      // Draw carpet background - office style
+      ctx.fillStyle = '#1e1e2e';
       ctx.fillRect(0, 0, width, height);
 
-      // Draw carpet pattern (subtle grid)
-      ctx.strokeStyle = 'rgba(100, 100, 120, 0.08)';
+      // Draw carpet tile pattern
+      const tileSize = 40;
+      for (let x = 0; x < width; x += tileSize) {
+        for (let y = 0; y < height; y += tileSize) {
+          // Checkerboard subtle pattern
+          const isEven = ((x / tileSize) + (y / tileSize)) % 2 === 0;
+          ctx.fillStyle = isEven ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)';
+          ctx.fillRect(x, y, tileSize, tileSize);
+        }
+      }
+
+      // Draw carpet grid lines
+      ctx.strokeStyle = 'rgba(100, 100, 120, 0.06)';
       ctx.lineWidth = 1;
-      const tileSize = 60;
       for (let x = 0; x < width; x += tileSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
@@ -766,9 +772,9 @@ const OfficeCanvas: React.FC = () => {
         ctx.stroke();
       }
 
-      // Draw office carpet areas (lighter zones)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
-      ctx.fillRect(width * 0.15, height * 0.25, width * 0.7, height * 0.65);
+      // Draw main office carpet area (lighter)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.015)';
+      ctx.fillRect(width * 0.12, height * 0.20, width * 0.76, height * 0.70);
 
       // Draw zones with furniture
       Object.values(zones).forEach(zone => {
