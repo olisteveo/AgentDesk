@@ -144,14 +144,15 @@ const DEFAULT_SUBSCRIPTIONS: Subscription[] = [
 ];
 
 const ZONES: Record<string, Zone> = {
-  ceo: { x: 0.35, y: 0.12, w: 180, h: 100, color: '#ffd700', label: 'CEO Office' },
-  ops: { x: 0.65, y: 0.12, w: 180, h: 100, color: '#ff6b6b', label: 'Operations' },
-  creative: { x: 0.30, y: 0.38, w: 200, h: 120, color: '#feca57', label: 'Nano Banana Studio' },
-  research: { x: 0.70, y: 0.38, w: 200, h: 120, color: '#48dbfb', label: 'Research Lab' },
-  marketing: { x: 0.30, y: 0.62, w: 200, h: 120, color: '#ff9ff3', label: 'Marketing Lab' },
-  reporting: { x: 0.70, y: 0.62, w: 200, h: 120, color: '#54a0ff', label: 'Reporting' },
-  engineering: { x: 0.5, y: 0.85, w: 450, h: 160, color: '#1dd1a1', label: 'Engineering Floor' },
-  meeting: { x: 0.5, y: 0.50, w: 140, h: 90, color: '#a29bfe', label: 'Meeting Room' }
+  ceo: { x: 0.35, y: 0.12, w: 200, h: 110, color: '#ffd700', label: 'CEO Office' },
+  ops: { x: 0.65, y: 0.12, w: 200, h: 110, color: '#ff6b6b', label: 'Operations' },
+  creative: { x: 0.30, y: 0.38, w: 240, h: 140, color: '#feca57', label: 'Creative Studio' },
+  research: { x: 0.70, y: 0.38, w: 240, h: 140, color: '#48dbfb', label: 'Research Lab' },
+  marketing: { x: 0.30, y: 0.62, w: 240, h: 140, color: '#ff9ff3', label: 'Marketing Lab' },
+  reporting: { x: 0.70, y: 0.62, w: 240, h: 140, color: '#54a0ff', label: 'Reporting' },
+  engineering: { x: 0.5, y: 0.88, w: 500, h: 170, color: '#1dd1a1', label: 'Engineering Floor' },
+  meeting: { x: 0.5, y: 0.50, w: 160, h: 100, color: '#a29bfe', label: 'Meeting Room' },
+  watercooler: { x: 0.5, y: 0.75, w: 60, h: 60, color: '#74b9ff', label: '' }
 };
 
 const INITIAL_AGENTS: Agent[] = [
@@ -471,6 +472,8 @@ const OfficeCanvas: React.FC = () => {
     let lastTime = 0;
 
     const drawDesk = (zone: Zone) => {
+      if (zone.id === 'watercooler') return;
+      
       const deskW = zone.w;
       const deskH = zone.h;
       const x = zone.x - deskW/2;
@@ -515,14 +518,44 @@ const OfficeCanvas: React.FC = () => {
         ctx.strokeRect(x + deskW, y, 10, deskH);
       }
 
-      // Zone label on desk
+      // Zone label on desk - BIGGER
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillRect(x + 10, y + 10, deskW - 20, 28);
+      ctx.fillRect(x + 10, y + 10, deskW - 20, 36);
 
       ctx.fillStyle = zone.color;
-      ctx.font = 'bold 12px sans-serif';
+      ctx.font = 'bold 14px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(zone.label, zone.x, y + 30);
+      ctx.fillText(zone.label, zone.x, y + 35);
+    };
+
+    const drawWaterCooler = (x: number, y: number) => {
+      const size = 50;
+      
+      // Water bottle (blue)
+      ctx.fillStyle = '#74b9ff';
+      ctx.beginPath();
+      ctx.arc(x, y - size/3, size/3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Bottle highlight
+      ctx.fillStyle = '#a8d8ff';
+      ctx.beginPath();
+      ctx.arc(x - 8, y - size/3 - 5, 8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Stand/base
+      ctx.fillStyle = '#636e72';
+      ctx.fillRect(x - size/2, y, size, size/2);
+      
+      // Stand detail
+      ctx.fillStyle = '#74b9ff';
+      ctx.fillRect(x - 5, y + 5, 10, size/2 - 10);
+      
+      // Spigot
+      ctx.fillStyle = '#b2bec3';
+      ctx.beginPath();
+      ctx.arc(x, y + 8, 6, 0, Math.PI * 2);
+      ctx.fill();
     };
 
     const drawOfficePlant = (x: number, y: number, size: number = 40) => {
@@ -708,14 +741,18 @@ const OfficeCanvas: React.FC = () => {
 
       const zones = calculateZones(width, height);
 
-      // Draw office floor pattern
-      ctx.fillStyle = '#0d0d14';
+      // Draw carpet background
+      const carpetGradient = ctx.createLinearGradient(0, 0, width, height);
+      carpetGradient.addColorStop(0, '#1a1a2e');
+      carpetGradient.addColorStop(0.5, '#16213e');
+      carpetGradient.addColorStop(1, '#1a1a2e');
+      ctx.fillStyle = carpetGradient;
       ctx.fillRect(0, 0, width, height);
 
-      // Draw floor tiles
-      ctx.strokeStyle = '#1a1a25';
+      // Draw carpet pattern (subtle grid)
+      ctx.strokeStyle = 'rgba(100, 100, 120, 0.08)';
       ctx.lineWidth = 1;
-      const tileSize = 100;
+      const tileSize = 60;
       for (let x = 0; x < width; x += tileSize) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
@@ -728,6 +765,10 @@ const OfficeCanvas: React.FC = () => {
         ctx.lineTo(width, y);
         ctx.stroke();
       }
+
+      // Draw office carpet areas (lighter zones)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+      ctx.fillRect(width * 0.15, height * 0.25, width * 0.7, height * 0.65);
 
       // Draw zones with furniture
       Object.values(zones).forEach(zone => {
@@ -749,6 +790,11 @@ const OfficeCanvas: React.FC = () => {
       if (zones.meeting) {
         drawOfficePlant(zones.meeting.x - 120, zones.meeting.y, 40);
         drawOfficePlant(zones.meeting.x + 120, zones.meeting.y, 42);
+      }
+
+      // Water cooler
+      if (zones.watercooler) {
+        drawWaterCooler(zones.watercooler.x, zones.watercooler.y);
       }
 
       drawConnections();
