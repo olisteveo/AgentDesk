@@ -154,51 +154,38 @@ const AVAILABLE_MODELS = [
   { id: 'nano-banana', name: 'Nano Banana', provider: 'custom', color: '#feca57' }
 ];
 
-// Calculate desk positions dynamically based on how many desks exist
+// Two-column layout: CEO always left, agent desks stack down the right column
 const calculateDeskLayout = (desks: Zone[]): Zone[] => {
-  const baseDesks = desks.filter(d => d.id === 'ceo' || d.id === 'ops' || d.id === 'meeting');
-  const userDesks = desks.filter(d => d.id?.startsWith('desk'));
-  
-  // Start positions - CEO and Ops close together at top
-  const layout: Zone[] = [
-    { ...baseDesks.find(d => d.id === 'ceo')!, x: 0.30, y: 0.15, w: 200, h: 100 },
-    { ...baseDesks.find(d => d.id === 'ops')!, x: 0.70, y: 0.15, w: 200, h: 100 }
-  ];
-  
-  // Add user desks in pairs
-  userDesks.forEach((desk, index) => {
-    const row = Math.floor(index / 2);
-    const isLeft = index % 2 === 0;
-    layout.push({
-      ...desk,
-      x: isLeft ? 0.30 : 0.70,
-      y: 0.32 + row * 0.17,
-      w: 200,
-      h: 100
-    });
+  const ceo     = desks.find(d => d.id === 'ceo');
+  const meeting = desks.find(d => d.id === 'meeting');
+  const agentDesks = desks.filter(d => d.id?.startsWith('desk'));
+
+  const layout: Zone[] = [];
+
+  // CEO anchored left column — offset right to clear left sidebar panels
+  if (ceo) layout.push({ ...ceo, x: 0.38, y: 0.20 });
+
+  // Agent desks stack down the right column
+  agentDesks.forEach((desk, i) => {
+    layout.push({ ...desk, x: 0.72, y: 0.20 + i * 0.20 });
   });
-  
-  // Meeting room at bottom, moves down as desks added
-  const meetingY = userDesks.length > 0 
-    ? 0.32 + Math.ceil(userDesks.length / 2) * 0.17 + 0.05
-    : 0.32;
-  
-  layout.push({
-    ...baseDesks.find(d => d.id === 'meeting')!,
-    x: 0.5,
-    y: Math.min(meetingY, 0.90),
-    w: 400,
-    h: 120
-  });
-  
+
+  // Meeting room always below everything, centred
+  if (meeting) {
+    const lastAgentY = agentDesks.length > 0
+      ? 0.20 + (agentDesks.length - 1) * 0.20
+      : 0.20;
+    const meetingY = Math.min(lastAgentY + 0.28, 0.88);
+    layout.push({ ...meeting, x: 0.50, y: meetingY });
+  }
+
   return layout;
 };
 
-// Default starts with just CEO, Ops, Meeting Room close together
+// Default: just CEO + Meeting Room (no ops/OpenClaw)
 const DEFAULT_DESKS: Zone[] = [
-  { id: 'ceo', x: 0.30, y: 0.15, w: 200, h: 100, color: '#ffd700', label: 'CEO Office' },
-  { id: 'ops', x: 0.70, y: 0.15, w: 200, h: 100, color: '#ff6b6b', label: 'Operations' },
-  { id: 'meeting', x: 0.5, y: 0.32, w: 400, h: 120, color: '#74b9ff', label: 'Meeting Room' }
+  { id: 'ceo',     x: 0.22, y: 0.20, w: 200, h: 100, color: '#ffd700', label: 'CEO Office' },
+  { id: 'meeting', x: 0.50, y: 0.55, w: 400, h: 120, color: '#74b9ff', label: 'Meeting Room' }
 ];
 
 // Desk to model assignments - users configure this
@@ -229,16 +216,46 @@ const DEFAULT_ASSIGNMENTS: DeskAssignment[] = [
 ];
 
 const INITIAL_AGENTS: Agent[] = [
-  { id: 'ceo', name: 'You', role: 'CEO', zone: 'ceo', x: 0, y: 0, color: '#ffd700', emoji: '', avatar: '', deskOffset: { x: 0, y: 10 }, isWorking: false },
-  { id: 'ops', name: 'OpenClaw', role: 'Operations Manager', zone: 'ops', x: 0, y: 0, color: '#ff6b6b', emoji: '', avatar: '', deskOffset: { x: 0, y: 10 }, isWorking: false }
+  { id: 'ceo', name: 'You', role: 'CEO', zone: 'ceo', x: 0, y: 0, color: '#ffd700', emoji: '', avatar: 'avatar1', deskOffset: { x: 0, y: 10 }, isWorking: false }
 ];
+
+// Sprite assets for the office
+const SPRITE_ASSETS = {
+  carpet: '/assets/carpet.png',
+  deskMini: '/assets/desk-mini.png',
+  deskStandard: '/assets/desk-standard.png',
+  deskPower: '/assets/desk-boss.png',
+  avatar1: '/assets/avatar-01.png',
+  avatar2: '/assets/avatar-02.png',
+  avatar3: '/assets/avatar-03.png',
+};
+
+// Which desk sprite to use for each zone id
+// agent desks cycle: desk1/2→mini, desk3/4→standard, desk5/6→power
+const ZONE_DESK_SPRITE: Record<string, keyof typeof SPRITE_ASSETS> = {
+  ceo:   'deskPower',
+  desk1: 'deskMini',
+  desk2: 'deskMini',
+  desk3: 'deskStandard',
+  desk4: 'deskStandard',
+  desk5: 'deskPower',
+  desk6: 'deskPower',
+  // 'meeting' intentionally omitted — drawn as placeholder
+};
+
+// Fallback avatar sprite per agent id (overridden by agent.avatar field)
+const AGENT_AVATAR_SPRITE: Record<string, keyof typeof SPRITE_ASSETS> = {
+  ceo: 'avatar1',
+};
 
 const OfficeCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const carpetPatternRef = useRef<CanvasPattern | null>(null);
+  const [sprites, setSprites] = useState<Record<string, HTMLImageElement>>({});
   const [agents, setAgents] = useState<Agent[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [taskLog, setTaskLog] = useState<string[]>(['Welcome to Kreative HQ...']);
+  const [taskLog, setTaskLog] = useState<string[]>(['Welcome to Agent Desk...']);
   const [isPaused, setIsPaused] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState('');
@@ -250,6 +267,11 @@ const OfficeCanvas: React.FC = () => {
   const [todayApiCost, setTodayApiCost] = useState<number>(0);
   const animationRef = useRef<number | undefined>(undefined);
   const dimensionsRef = useRef({ width: 0, height: 0 });
+
+  // Onboarding state
+  const [onboardingDone, setOnboardingDone] = useState(false);
+  const [ceoName, setCeoName] = useState('You');
+  const [ceoSprite, setCeoSprite] = useState<'avatar1' | 'avatar2' | 'avatar3'>('avatar1');
 
   // Desk configuration state
   const [desks, setDesks] = useState<Zone[]>(DEFAULT_DESKS);
@@ -284,6 +306,48 @@ const OfficeCanvas: React.FC = () => {
     rules: []
   });
   const [newNote, setNewNote] = useState('');
+
+  // Load sprite images once on mount
+  useEffect(() => {
+    const loadImage = (src: string): Promise<HTMLImageElement> =>
+      new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(img); // resolve even on error; img.complete=false
+        img.src = src;
+      });
+
+    Promise.all(
+      Object.entries(SPRITE_ASSETS).map(([key, src]) =>
+        loadImage(src).then(img => [key, img] as [string, HTMLImageElement])
+      )
+    ).then(results => {
+      const map: Record<string, HTMLImageElement> = {};
+      results.forEach(([k, img]) => { map[k] = img; });
+      setSprites(map);
+
+      // Pre-bake carpet pattern into an offscreen canvas at tile size
+      const carpetImg = map['carpet'];
+      if (carpetImg && carpetImg.complete && carpetImg.naturalWidth > 0) {
+        const TILE = 300; // display tile size in px
+        const tileH = Math.round(TILE * carpetImg.naturalHeight / carpetImg.naturalWidth);
+        const offscreen = document.createElement('canvas');
+        offscreen.width = TILE;
+        offscreen.height = tileH;
+        const octx = offscreen.getContext('2d')!;
+        octx.drawImage(carpetImg, 0, 0, TILE, tileH);
+        // We store the offscreen canvas; pattern gets created per-canvas-context in render
+        // Store on ref so render can use it without recreating every frame
+        const mainCanvas = document.querySelector('canvas.office-canvas') as HTMLCanvasElement;
+        if (mainCanvas) {
+          const mctx = mainCanvas.getContext('2d');
+          if (mctx) {
+            carpetPatternRef.current = mctx.createPattern(offscreen, 'repeat');
+          }
+        }
+      }
+    });
+  }, []);
 
   const calculateZones = useCallback((width: number, height: number): Record<string, Zone> => {
     const layout = calculateDeskLayout(desks);
@@ -532,6 +596,8 @@ const OfficeCanvas: React.FC = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
       dimensionsRef.current = { width: canvas.width, height: canvas.height };
+      // Invalidate cached carpet pattern — context resets on canvas resize
+      carpetPatternRef.current = null;
       setAgents(resetAgents(canvas.width, canvas.height));
     };
 
@@ -549,66 +615,124 @@ const OfficeCanvas: React.FC = () => {
 
     let lastTime = 0;
 
+    // All desks render at the same HEIGHT so they look uniform.
+    // boss: 141×156 natural → at DESK_H=80, width = 80*(141/156) = 72px  ✓ matches screenshot
+    // mini: 246×155 natural → at DESK_H=80, width = 80*(246/155) = 127px
+    // std:  347×155 natural → at DESK_H=80, width = 80*(347/155) = 179px
+    const DESK_H    =  80;  // all desks share this display height
+    const AVATAR_PX =  72;  // avatar size (sprites are 142×142 square)
+
+    // Helper: get rendered desk dimensions for a sprite
+    const getDeskDims = (img: HTMLImageElement) => {
+      const dH = DESK_H;
+      const dW = Math.round(DESK_H * (img.naturalWidth / img.naturalHeight));
+      return { dW, dH };
+    };
+
     const drawDesk = (zone: Zone) => {
       if (zone.id === 'watercooler') return;
-      
-      const deskW = zone.w;
-      const deskH = zone.h;
-      const x = zone.x - deskW/2;
-      const y = zone.y - deskH/2;
 
-      // Desk shadow
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      ctx.shadowOffsetY = 10;
+      // Meeting room: draw as placeholder until proper assets arrive
+      if (zone.id === 'meeting') {
+        const mW = 220, mH = 80;
+        const mx = Math.round(zone.x - mW / 2);
+        const my = Math.round(zone.y - mH / 2);
 
-      // Desk surface (wood/dark material)
-      const deskGradient = ctx.createLinearGradient(x, y, x, y + deskH);
-      deskGradient.addColorStop(0, '#2a2a3e');
-      deskGradient.addColorStop(0.5, '#1f1f2e');
-      deskGradient.addColorStop(1, '#1a1a2e');
+        // Background fill
+        ctx.fillStyle = 'rgba(116, 185, 255, 0.08)';
+        ctx.fillRect(mx, my, mW, mH);
 
-      ctx.fillStyle = deskGradient;
-      ctx.fillRect(x, y, deskW, deskH);
+        // Dashed border
+        ctx.strokeStyle = zone.color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 5]);
+        ctx.strokeRect(mx, my, mW, mH);
+        ctx.setLineDash([]);
 
-      // Desk border/frame
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetY = 0;
-      ctx.strokeStyle = zone.color + '60';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, deskW, deskH);
+        // Label
+        ctx.fillStyle = zone.color;
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Meeting Room', zone.x, zone.y - 6);
 
-      // Desk top highlight
-      ctx.fillStyle = zone.color + '20';
-      ctx.fillRect(x, y, deskW, 4);
-
-      // Partition walls for zones (except meeting room)
-      if (zone.id !== 'meeting') {
-        ctx.fillStyle = '#151520';
-        // Left partition
-        ctx.fillRect(x - 10, y, 10, deskH);
-        ctx.strokeStyle = '#252535';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x - 10, y, 10, deskH);
-
-        // Right partition
-        ctx.fillRect(x + deskW, y, 10, deskH);
-        ctx.strokeRect(x + deskW, y, 10, deskH);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('Assets coming soon', zone.x, zone.y + 10);
+        return;
       }
 
-      // Zone label removed from here - drawn on top later
+      const spriteKey = zone.id ? ZONE_DESK_SPRITE[zone.id] : undefined;
+      const spriteImg = spriteKey ? sprites[spriteKey] : undefined;
+
+      if (spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
+        // All desks same height, width scales from natural ratio
+        const { dW, dH } = getDeskDims(spriteImg);
+        const x = Math.round(zone.x - dW / 2);
+        const y = Math.round(zone.y - dH / 2);
+
+        // Shadow
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowOffsetY = 5;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(spriteImg, x, y, dW, dH);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.imageSmoothingEnabled = true;
+
+        // Coloured zone indicator dot above sprite
+        ctx.fillStyle = zone.color;
+        ctx.beginPath();
+        ctx.arc(zone.x, y - 6, 4, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Fallback: geometric desk at zone dimensions
+        const deskW = zone.w;
+        const deskH = zone.h;
+        const x = zone.x - deskW / 2;
+        const y = zone.y - deskH / 2;
+
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowOffsetY = 10;
+
+        const deskGradient = ctx.createLinearGradient(x, y, x, y + deskH);
+        deskGradient.addColorStop(0, '#2a2a3e');
+        deskGradient.addColorStop(0.5, '#1f1f2e');
+        deskGradient.addColorStop(1, '#1a1a2e');
+        ctx.fillStyle = deskGradient;
+        ctx.fillRect(x, y, deskW, deskH);
+
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = zone.color + '60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, deskW, deskH);
+        ctx.fillStyle = zone.color + '20';
+        ctx.fillRect(x, y, deskW, 4);
+      }
     };
 
     const drawZoneLabel = (zone: Zone) => {
+      const spriteKey = zone.id ? ZONE_DESK_SPRITE[zone.id] : undefined;
+      const spriteImg = spriteKey ? sprites[spriteKey] : undefined;
+      let topOfDesk: number;
+      let labelW = 160;
+      if (spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
+        const { dW, dH } = getDeskDims(spriteImg);
+        topOfDesk = zone.y - dH / 2;
+        labelW = Math.max(dW, 120);
+      } else {
+        topOfDesk = zone.y - zone.h / 2;
+      }
+
       // Label positioned ABOVE the desk
       ctx.fillStyle = 'rgba(0,0,0,0.85)';
-      ctx.fillRect(zone.x - 80, zone.y - zone.h/2 - 45, 160, 32);
-
-      // Label text
+      ctx.fillRect(zone.x - labelW / 2, topOfDesk - 44, labelW, 30);
       ctx.fillStyle = zone.color;
-      ctx.font = 'bold 13px sans-serif';
+      ctx.font = 'bold 12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(zone.label, zone.x, zone.y - zone.h/2 - 23);
+      ctx.fillText(zone.label, zone.x, topOfDesk - 23);
     };
 
     const drawWaterCooler = (x: number, y: number) => {
@@ -694,57 +818,82 @@ const OfficeCanvas: React.FC = () => {
     };
 
     const drawWorker = (agent: Agent, time: number) => {
-      const bobOffset = agent.isWorking ? Math.sin(time / 300) * 2 : Math.sin(time / 500) * 3;
+      const bob = agent.isWorking ? Math.sin(time / 300) * 2 : Math.sin(time / 500) * 1.5;
+
+      // Resolve avatar sprite: agent.avatar field wins, then fallback map, then cycle
+      const agentIndex = parseInt(agent.id.replace(/\D/g, '') || '0') % 3;
+      const spriteKey: keyof typeof SPRITE_ASSETS =
+        (agent.avatar && agent.avatar in sprites)
+          ? (agent.avatar as keyof typeof SPRITE_ASSETS)
+          : (AGENT_AVATAR_SPRITE[agent.id]
+              ?? (['avatar1', 'avatar2', 'avatar3'][agentIndex] as keyof typeof SPRITE_ASSETS));
+      const avatarImg = sprites[spriteKey];
+
+      // Avatar size — square sprites so avW === avH === AVATAR_PX
+      const avW = AVATAR_PX;
+      const avH = AVATAR_PX;
+
+      // Position avatar to the RIGHT of the desk sprite.
+      // agent.x is the zone centre; we need the desk's right edge.
+      const deskSpriteKey = agent.zone ? ZONE_DESK_SPRITE[agent.zone] : undefined;
+      const deskSpriteImg = deskSpriteKey ? sprites[deskSpriteKey] : undefined;
+      const deskHalfW = deskSpriteImg && deskSpriteImg.naturalWidth > 0
+        ? Math.round(getDeskDims(deskSpriteImg).dW / 2)
+        : 50;
+
+      // Avatar stands to the right of the desk, vertically centred on desk
+      const avX = Math.round(agent.x + deskHalfW + 8);
+      const avY = Math.round(agent.y - avH / 2 + bob);
 
       // Shadow
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.beginPath();
-      ctx.ellipse(agent.x, agent.y + 35, 25, 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(avX + avW / 2, avY + avH + 2, avW * 0.4, 5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Body (office chair style)
-      ctx.fillStyle = agent.color + '30';
-      ctx.beginPath();
-      ctx.roundRect(agent.x - 20, agent.y + bobOffset - 10, 40, 35, 8);
-      ctx.fill();
+      if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(avatarImg, avX, avY, avW, avH);
+        ctx.imageSmoothingEnabled = true;
+      } else {
+        // Fallback
+        ctx.fillStyle = agent.color + '60';
+        ctx.beginPath();
+        ctx.arc(avX + avW / 2, avY + avH * 0.3, avW * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(avX + avW * 0.2, avY + avH * 0.55, avW * 0.6, avH * 0.4);
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.round(avW * 0.3)}px sans-serif`;
+        ctx.textAlign = 'center';
+        const initials = agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        ctx.fillText(initials, avX + avW / 2, avY + avH * 0.35);
+      }
 
-      // Head
-      ctx.fillStyle = '#f0d5b8'; // Skin tone
-      ctx.beginPath();
-      ctx.arc(agent.x, agent.y + bobOffset - 25, 18, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Hair/outline
-      ctx.strokeStyle = agent.color;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Initials instead of emoji
+      // Name tag below avatar
+      const tagY = avY + avH + 4;
+      ctx.fillStyle = 'rgba(0,0,0,0.75)';
+      ctx.fillRect(avX, tagY, avW, 15);
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px sans-serif';
+      ctx.font = '9px sans-serif';
       ctx.textAlign = 'center';
-      const initials = agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-      ctx.fillText(initials, agent.x, agent.y + bobOffset - 20);
+      ctx.fillText(agent.name, avX + avW / 2, tagY + 10);
 
-      // Name tag (subtle)
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(agent.x - 35, agent.y + bobOffset + 20, 70, 18);
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px sans-serif';
-      ctx.fillText(agent.name, agent.x, agent.y + bobOffset + 32);
-
-      // Status dot (clean, no emoji)
-      const statusColor = agent.targetX !== undefined ? '#feca57' : agent.isWorking ? '#ff6b6b' : '#1dd1a1';
+      // Status dot — top-right corner of avatar
+      const statusColor = agent.targetX !== undefined ? '#feca57'
+        : agent.isWorking ? '#ff6b6b' : '#1dd1a1';
       ctx.fillStyle = statusColor;
       ctx.beginPath();
-      ctx.arc(agent.x + 22, agent.y + bobOffset - 35, 5, 0, Math.PI * 2);
+      ctx.arc(avX + avW, avY + 2, 5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
-      // Task indicator (dot only)
+      // Task dot — top-left
       if (agent.currentTask) {
         ctx.fillStyle = '#feca57';
         ctx.beginPath();
-        ctx.arc(agent.x - 22, agent.y + bobOffset - 35, 5, 0, Math.PI * 2);
+        ctx.arc(avX, avY + 2, 5, 0, Math.PI * 2);
         ctx.fill();
       }
     };
@@ -806,85 +955,39 @@ const OfficeCanvas: React.FC = () => {
       const { width, height } = dimensionsRef.current;
       ctx.clearRect(0, 0, width, height);
 
-      // Grid
-      ctx.strokeStyle = '#1a1a2e';
-      ctx.lineWidth = 1;
-      for (let x = 0; x < width; x += 50) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
-      }
-      for (let y = 0; y < height; y += 50) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-        ctx.stroke();
-      }
-
       const zones = calculateZones(width, height);
 
-      // Draw carpet background - office style
-      ctx.fillStyle = '#1e1e2e';
-      ctx.fillRect(0, 0, width, height);
-
-      // Draw carpet tile pattern
-      const tileSize = 40;
-      for (let x = 0; x < width; x += tileSize) {
-        for (let y = 0; y < height; y += tileSize) {
-          // Checkerboard subtle pattern
-          const isEven = ((x / tileSize) + (y / tileSize)) % 2 === 0;
-          ctx.fillStyle = isEven ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)';
-          ctx.fillRect(x, y, tileSize, tileSize);
+      // ── Carpet background ────────────────────────────────────────
+      const carpetImg = sprites['carpet'];
+      if (carpetImg && carpetImg.complete && carpetImg.naturalWidth > 0) {
+        // Build pattern lazily (once per context) if not already cached
+        if (!carpetPatternRef.current) {
+          const TILE = 300;
+          const tileH = Math.round(TILE * carpetImg.naturalHeight / carpetImg.naturalWidth);
+          const offscreen = document.createElement('canvas');
+          offscreen.width = TILE;
+          offscreen.height = tileH;
+          const octx = offscreen.getContext('2d')!;
+          octx.drawImage(carpetImg, 0, 0, TILE, tileH);
+          carpetPatternRef.current = ctx.createPattern(offscreen, 'repeat');
         }
+        if (carpetPatternRef.current) {
+          ctx.fillStyle = carpetPatternRef.current;
+          ctx.fillRect(0, 0, width, height);
+          // Subtle dark overlay — keep it light so carpet shows through
+          ctx.fillStyle = 'rgba(10, 8, 20, 0.25)';
+          ctx.fillRect(0, 0, width, height);
+        }
+      } else {
+        ctx.fillStyle = '#1e1e2e';
+        ctx.fillRect(0, 0, width, height);
       }
-
-      // Draw carpet grid lines
-      ctx.strokeStyle = 'rgba(100, 100, 120, 0.06)';
-      ctx.lineWidth = 1;
-      for (let x = 0; x < width; x += tileSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
-      }
-      for (let y = 0; y < height; y += tileSize) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
-        ctx.stroke();
-      }
-
-      // Draw main office carpet area (lighter)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.015)';
-      ctx.fillRect(width * 0.12, height * 0.20, width * 0.76, height * 0.70);
 
       // Draw zones with furniture
+      // Note: desk sprites already include monitors; only draw monitors on fallback (handled in drawDesk)
       Object.values(zones).forEach(zone => {
         drawDesk(zone);
-
-        // Add monitors to desks
-        if (zone.id !== 'meeting' && zone.id !== 'watercooler') {
-          drawMonitor(zone.x, zone.y - 10);
-        }
       });
-
-      // Draw office plants in corners
-      drawOfficePlant(width * 0.05, height * 0.15, 50);
-      drawOfficePlant(width * 0.95, height * 0.15, 45);
-      drawOfficePlant(width * 0.08, height * 0.85, 55);
-      drawOfficePlant(width * 0.92, height * 0.85, 48);
-
-      // Plants near meeting room
-      if (zones.meeting) {
-        drawOfficePlant(zones.meeting.x - 120, zones.meeting.y, 40);
-        drawOfficePlant(zones.meeting.x + 120, zones.meeting.y, 42);
-      }
-
-      // Water cooler
-      if (zones.watercooler) {
-        drawWaterCooler(zones.watercooler.x, zones.watercooler.y);
-      }
 
       drawConnections();
 
@@ -906,11 +1009,11 @@ const OfficeCanvas: React.FC = () => {
         }
       });
 
-      // Title (clean, no emoji)
+      // Title
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 32px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Kreative HQ', width / 2, 45);
+      ctx.fillText('Agent Desk', width / 2, 45);
 
       // Subtitle
       ctx.fillStyle = '#666';
@@ -937,7 +1040,7 @@ const OfficeCanvas: React.FC = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [agents, particles, isPaused, calculateZones]);
+  }, [agents, particles, isPaused, calculateZones, sprites]);
 
   const togglePause = () => {
     setIsPaused(!isPaused);
@@ -952,9 +1055,70 @@ const OfficeCanvas: React.FC = () => {
     addLogEntry('Office reset');
   };
 
+  const handleOnboardingComplete = () => {
+    setAgents(prev => prev.map(a =>
+      a.id === 'ceo' ? { ...a, name: ceoName || 'You', avatar: ceoSprite } : a
+    ));
+    setOnboardingDone(true);
+  };
+
   return (
     <div className="office-canvas-container">
       <canvas ref={canvasRef} className="office-canvas" />
+
+      {/* Onboarding Modal */}
+      {!onboardingDone && (
+        <div className="onboarding-overlay">
+          <div className="onboarding-modal">
+            <div className="onboarding-logo">🏢</div>
+            <h1>Welcome to Agent Desk</h1>
+            <p className="onboarding-subtitle">Your AI-powered virtual office</p>
+
+            <div className="onboarding-section">
+              <label>What should we call you?</label>
+              <input
+                type="text"
+                className="onboarding-input"
+                value={ceoName}
+                onChange={e => setCeoName(e.target.value)}
+                placeholder="Your name"
+                maxLength={24}
+                autoFocus
+              />
+            </div>
+
+            <div className="onboarding-section">
+              <label>Pick your character</label>
+              <div className="sprite-picker">
+                {(['avatar1', 'avatar2', 'avatar3'] as const).map((key, i) => (
+                  <button
+                    key={key}
+                    className={`sprite-option${ceoSprite === key ? ' selected' : ''}`}
+                    onClick={() => setCeoSprite(key)}
+                    title={`Character ${i + 1}`}
+                  >
+                    <img
+                      src={`/assets/avatar-0${i + 1}.png`}
+                      alt={`Character ${i + 1}`}
+                      width={72}
+                      height={72}
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              className="onboarding-enter-btn"
+              onClick={handleOnboardingComplete}
+              disabled={!ceoName.trim()}
+            >
+              Enter the Office →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Top Navigation Bar */}
       <div className="top-nav">
@@ -973,7 +1137,7 @@ const OfficeCanvas: React.FC = () => {
 
       <div className="left-sidebar">
         <div className="ui-panel" onClick={() => setShowWhiteboard(true)} style={{ cursor: 'pointer' }}>
-          <h1>Kreative</h1>
+          <h1>Agent Desk</h1>
           <p>AI Agency Dashboard</p>
           <div className="task-log">
             {taskLog.map((entry, i) => (

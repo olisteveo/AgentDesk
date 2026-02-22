@@ -1,0 +1,25 @@
+.pixel-office-wrapper {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.pixel-office-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.pixel-office-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+  color: #888;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+}

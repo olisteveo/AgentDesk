@@ -1,43 +1,51 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html, body {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #0a0a0f;
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-}
-
 .app {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
+  background: #1a1a2e;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Custom scrollbar for webkit browsers */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.mode-toggle {
+  display: flex;
+  gap: 10px;
+  padding: 15px 20px;
+  background: rgba(0,0,0,0.5);
+  border-bottom: 1px solid #333;
+  align-items: center;
 }
 
-::-webkit-scrollbar-track {
-  background: #0a0a0f;
+.mode-toggle button {
+  padding: 8px 16px;
+  border: 1px solid #444;
+  background: rgba(0,0,0,0.3);
+  color: #888;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 4px;
+.mode-toggle button.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #444;
+.tier-toggle {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
 }
 
-/* Selection color */
-::selection {
-  background: rgba(102, 126, 234, 0.3);
-  color: #fff;
+.tier-toggle button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.pixel-preview {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
 }
