@@ -29,6 +29,7 @@ export interface AuthUser {
   displayName: string;
   role: string;
   emailVerified?: boolean;
+  planSelected?: boolean;
   onboardingDone?: boolean;
   avatarId?: string;
 }
@@ -98,6 +99,15 @@ export function googleAuth(credential: string): Promise<AuthResponse> {
   return apiRequest<AuthResponse>('/api/auth/google', {
     method: 'POST',
     body: JSON.stringify({ credential }),
+  });
+}
+
+export function selectPlan(
+  plan: 'free' | 'pro',
+): Promise<{ message: string; plan: string; maxDesks: number; monthlyBudget: number }> {
+  return apiRequest('/api/auth/select-plan', {
+    method: 'PATCH',
+    body: JSON.stringify({ plan }),
   });
 }
 

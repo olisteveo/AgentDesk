@@ -1,0 +1,226 @@
+/* ═══════════════════════════════════════════════════════════
+   Select Plan Page — glass-morphic two-panel pricing
+   ═══════════════════════════════════════════════════════════ */
+
+.select-plan-container {
+  max-width: 720px;
+  width: 100%;
+  padding: 0 20px;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+
+.select-plan-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.select-plan-title {
+  font-size: 30px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 10px;
+  background: linear-gradient(135deg, #fff 30%, #aaa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.select-plan-subtitle {
+  font-size: 15px;
+  color: #888;
+  margin: 0;
+}
+
+.select-plan-byok {
+  margin: 16px auto 0;
+  max-width: 480px;
+  font-size: 13px;
+  color: #8b9cf7;
+  line-height: 1.5;
+  background: rgba(102, 126, 234, 0.06);
+  border: 1px solid rgba(102, 126, 234, 0.15);
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.select-plan-byok strong {
+  color: #a5b4fc;
+}
+
+/* ── Grid ───────────────────────────────────────────────── */
+
+.select-plan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* ── Card base ──────────────────────────────────────────── */
+
+.select-plan-card {
+  position: relative;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid #222;
+  border-radius: 16px;
+  padding: 32px 28px;
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+}
+
+.select-plan-card:hover {
+  border-color: #444;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Pro card accent ────────────────────────────────────── */
+
+.select-plan-card--pro {
+  border-color: rgba(102, 126, 234, 0.3);
+  background:
+    linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(118, 75, 162, 0.04) 100%),
+    rgba(0, 0, 0, 0.6);
+}
+
+.select-plan-card--pro:hover {
+  border-color: rgba(102, 126, 234, 0.5);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(102, 126, 234, 0.06);
+}
+
+/* ── Popular badge ──────────────────────────────────────── */
+
+.select-plan-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+/* ── Card content ───────────────────────────────────────── */
+
+.select-plan-card-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 16px;
+}
+
+.select-plan-card-price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.select-plan-card-amount {
+  font-size: 40px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.select-plan-card-period {
+  font-size: 14px;
+  color: #666;
+}
+
+.select-plan-card-tagline {
+  font-size: 13px;
+  color: #777;
+  margin: 0 0 24px;
+}
+
+/* ── Feature list ───────────────────────────────────────── */
+
+.select-plan-card-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 28px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.select-plan-card-features li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #bbb;
+}
+
+.select-plan-check {
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+/* ── CTA button ─────────────────────────────────────────── */
+
+.select-plan-card-btn {
+  width: 100%;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid #333;
+  color: #ccc;
+}
+
+.select-plan-card-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #555;
+  transform: translateY(-1px);
+}
+
+/* Pro button — gradient */
+.select-plan-card-btn--pro {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: #fff;
+}
+
+.select-plan-card-btn--pro:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7b92f0 0%, #8a5db5 100%);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
+  transform: translateY(-2px);
+}
+
+.select-plan-card-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .select-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .select-plan-card-amount {
+    font-size: 34px;
+  }
+
+  .select-plan-title {
+    font-size: 24px;
+  }
+}

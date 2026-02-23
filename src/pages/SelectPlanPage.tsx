@@ -1,42 +1,46 @@
 /**
- * SelectPlanPage — shown after email verification.
- * User picks a plan (free / pro / enterprise) before entering the office.
+ * SelectPlanPage — shown after email verification in the onboarding funnel.
+ * Two-panel layout: Free (left) and Pro (right).
  *
- * For now this stores the choice via API. Stripe checkout will be
- * wired up later — free tier goes straight through, paid tiers
- * will redirect to Stripe Checkout.
+ * Free → continue straight to CEO name/avatar onboarding.
+ * Pro  → placeholder for Stripe checkout (scaffolded, not wired yet).
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { apiRequest } from '../api/client';
+import { selectPlan } from '../api/auth';
+import { Check, Zap } from 'lucide-react';
 import './auth.css';
+import './select-plan.css';
 
 // ── Plan data ───────────────────────────────────────────────
 
-interface PlanOption {
-  id: 'free' | 'pro' | 'enterprise';
+interface PlanDef {
+  id: 'free' | 'pro';
   name: string;
   price: string;
   period: string;
-  features: string[];
-  highlight?: boolean;
+  tagline: string;
   cta: string;
+  features: string[];
+  highlighted?: boolean;
 }
 
-const PLANS: PlanOption[] = [
+const PLANS: PlanDef[] = [
   {
     id: 'free',
-    name: 'Free',
+    name: 'Starter',
     price: '$0',
     period: 'forever',
+    tagline: 'For individuals exploring AI workflows',
     cta: 'Get Started',
     features: [
-      '2 AI desks',
-      '1 team member',
-      '$50/mo budget cap',
-      'Basic analytics',
+      '1 user',
+      '2 AI agent desks',
+      'Basic task management',
+      'Basic cost overview',
+      'Bring your own API keys',
       'Community support',
     ],
   },
@@ -45,33 +49,18 @@ const PLANS: PlanOption[] = [
     name: 'Pro',
     price: '$29',
     period: '/month',
-    cta: 'Start Pro Trial',
-    highlight: true,
+    tagline: 'For professionals and small teams',
+    cta: 'Start 14-Day Free Trial',
+    highlighted: true,
     features: [
-      '10 AI desks',
-      '5 team members',
-      '$500/mo budget cap',
-      'Advanced analytics',
-      'Meeting room access',
-      'Whiteboard (5 tabs)',
-      'Priority support',
-    ],
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: '$99',
-    period: '/month',
-    cta: 'Contact Sales',
-    features: [
-      'Unlimited AI desks',
-      'Unlimited team members',
-      'Custom budget limits',
-      'Full analytics suite',
-      'Meeting room + recording',
-      'Unlimited whiteboards',
-      'SSO & audit logs',
-      'Dedicated support',
+      'Up to 5 users',
+      '10 AI agent desks',
+      'Advanced task management',
+      'Full analytics dashboard',
+      'Meeting room',
+      'Shared whiteboard',
+      'Bring your own API keys',
+      'Priority email support',
     ],
   },
 ];
@@ -80,158 +69,95 @@ const PLANS: PlanOption[] = [
 
 export function SelectPlanPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [selected, setSelected] = useState<PlanOption['id']>('free');
-  const [loading, setLoading] = useState(false);
+  const { updateUser } = useAuth();
+  const [loading, setLoading] = useState<'free' | 'pro' | null>(null);
   const [error, setError] = useState('');
 
-  const handleContinue = async () => {
-    setLoading(true);
+  const handleSelect = async (planId: 'free' | 'pro') => {
+    setLoading(planId);
     setError('');
 
     try {
-      // Update team plan via API
-      await apiRequest('/api/team', {
-        method: 'PATCH',
-        body: JSON.stringify({ plan: selected }),
-      });
+      const result = await selectPlan(planId);
 
-      // Update local user state
-      if (user) {
-        const stored = localStorage.getItem('user');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          parsed.plan = selected;
-          localStorage.setItem('user', JSON.stringify(parsed));
-        }
+      // Update local auth state
+      updateUser({ plan: result.plan, planSelected: true });
+
+      if (planId === 'pro') {
+        // TODO: redirect to Stripe Checkout when wired
+        // For now, treat same as free — go to onboarding
+        navigate('/office');
+      } else {
+        navigate('/office');
       }
-
-      navigate('/office');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to set plan';
+      const msg = err instanceof Error ? err.message : 'Failed to select plan';
       setError(msg);
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
   return (
     <div className="auth-page">
-      <div style={{ maxWidth: 900, width: '100%', padding: '0 20px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <h1 className="auth-title" style={{ fontSize: 28 }}>
-            Choose Your Plan
-          </h1>
-          <p style={{ color: '#888', fontSize: 15 }}>
-            You can upgrade or downgrade at any time from your office settings.
+      <div className="select-plan-container">
+        {/* Header */}
+        <div className="select-plan-header">
+          <h1 className="select-plan-title">Choose Your Plan</h1>
+          <p className="select-plan-subtitle">
+            Start free, upgrade when you need more power. Change any time from settings.
+          </p>
+          <p className="select-plan-byok">
+            🔑 All plans are <strong>BYOK</strong> — Bring Your Own Keys. You connect your own AI provider API keys. We never charge for AI usage, only for workspace features.
           </p>
         </div>
 
         {error && (
-          <p style={{ color: '#ff6b6b', textAlign: 'center', marginBottom: 16 }}>
+          <div className="form-error-global" style={{ marginBottom: 20, textAlign: 'center' }}>
             {error}
-          </p>
+          </div>
         )}
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: 20,
-            marginBottom: 32,
-          }}
-        >
+        {/* Plan cards */}
+        <div className="select-plan-grid">
           {PLANS.map((plan) => (
-            <button
+            <div
               key={plan.id}
-              onClick={() => setSelected(plan.id)}
-              style={{
-                background:
-                  selected === plan.id
-                    ? 'rgba(102, 126, 234, 0.12)'
-                    : 'rgba(255,255,255,0.03)',
-                border:
-                  selected === plan.id
-                    ? '2px solid #667eea'
-                    : '1px solid #333',
-                borderRadius: 12,
-                padding: 28,
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.2s ease',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
+              className={`select-plan-card${plan.highlighted ? ' select-plan-card--pro' : ''}`}
             >
-              {plan.highlight && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 12,
-                    right: -28,
-                    background: 'linear-gradient(135deg, #667eea, #764ba2)',
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: '4px 32px',
-                    transform: 'rotate(45deg)',
-                  }}
-                >
-                  POPULAR
+              {plan.highlighted && (
+                <div className="select-plan-badge">
+                  <Zap size={12} /> POPULAR
                 </div>
               )}
 
-              <h3
-                style={{
-                  color: '#fff',
-                  fontSize: 18,
-                  margin: '0 0 8px',
-                  fontWeight: 600,
-                }}
-              >
-                {plan.name}
-              </h3>
+              <h2 className="select-plan-card-name">{plan.name}</h2>
 
-              <div style={{ marginBottom: 20 }}>
-                <span style={{ color: '#fff', fontSize: 32, fontWeight: 700 }}>
-                  {plan.price}
-                </span>
-                <span style={{ color: '#888', fontSize: 14, marginLeft: 4 }}>
-                  {plan.period}
-                </span>
+              <div className="select-plan-card-price">
+                <span className="select-plan-card-amount">{plan.price}</span>
+                <span className="select-plan-card-period">{plan.period}</span>
               </div>
 
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <p className="select-plan-card-tagline">{plan.tagline}</p>
+
+              <ul className="select-plan-card-features">
                 {plan.features.map((f) => (
-                  <li
-                    key={f}
-                    style={{
-                      color: '#bbb',
-                      fontSize: 14,
-                      padding: '5px 0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <span style={{ color: '#667eea' }}>✓</span>
+                  <li key={f}>
+                    <Check size={15} strokeWidth={2.5} className="select-plan-check" />
                     {f}
                   </li>
                 ))}
               </ul>
-            </button>
-          ))}
-        </div>
 
-        <div style={{ textAlign: 'center' }}>
-          <button
-            className="auth-submit"
-            onClick={handleContinue}
-            disabled={loading}
-            style={{ minWidth: 220, fontSize: 16, padding: '14px 32px' }}
-          >
-            {loading ? 'Setting up...' : `Continue with ${PLANS.find((p) => p.id === selected)?.name}`}
-          </button>
+              <button
+                className={`select-plan-card-btn${plan.highlighted ? ' select-plan-card-btn--pro' : ''}`}
+                onClick={() => handleSelect(plan.id)}
+                disabled={loading !== null}
+              >
+                {loading === plan.id ? 'Setting up...' : plan.cta}
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </div>

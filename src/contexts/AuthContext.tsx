@@ -37,6 +37,7 @@ export interface AuthUser {
   teamName: string;
   plan: string;
   emailVerified: boolean;
+  planSelected: boolean;
   onboardingDone: boolean;
   avatarId: string;
 }
@@ -97,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       teamName: res.team.name,
       plan: res.team.plan ?? 'free',
       emailVerified: res.user.emailVerified ?? true,
+      planSelected: res.user.planSelected ?? true,
       onboardingDone: res.user.onboardingDone ?? false,
       avatarId: res.user.avatarId ?? 'avatar1',
     };

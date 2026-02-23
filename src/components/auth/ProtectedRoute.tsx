@@ -4,8 +4,8 @@
  * Enforces the full onboarding funnel:
  *   1. Not logged in       → /login
  *   2. Email not verified   → /verify-email-wait
- *   3. No plan selected yet → /select-plan (only for brand-new free accounts)
- *   4. All clear            → render children
+ *   3. No plan selected yet → /select-plan
+ *   4. All clear            → render children (office + in-app onboarding)
  */
 
 import { Navigate } from 'react-router-dom';
@@ -31,10 +31,16 @@ export function ProtectedRoute({ children }: Props) {
     return <Navigate to="/login" replace />;
   }
 
-  // Block until email is verified
+  // Step 1: Block until email is verified
   if (user && !user.emailVerified) {
     return <Navigate to="/verify-email-wait" replace />;
   }
 
+  // Step 2: Block until plan is selected
+  if (user && !user.planSelected) {
+    return <Navigate to="/select-plan" replace />;
+  }
+
+  // Step 3: All clear — render office (onboarding happens in-app)
   return <>{children}</>;
 }
