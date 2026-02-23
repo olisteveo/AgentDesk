@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import './OfficeCanvas.css';
 import HireWizard from './modals/HireWizard';
+import { AccountSettingsModal } from './modals/AccountSettingsModal';
 
 interface Agent {
   id: string;
@@ -239,6 +241,7 @@ const INITIAL_AGENTS: Agent[] = [
 // Sprite assets for the office
 const SPRITE_ASSETS = {
   carpet: '/assets/carpet.png',
+  officeWall: '/assets/office-wall.png',
   deskMini: '/assets/desk-mini.png',
   deskStandard: '/assets/desk-standard.png',
   deskPower: '/assets/desk-boss.png',
@@ -267,6 +270,7 @@ const AGENT_AVATAR_SPRITE: Record<string, keyof typeof SPRITE_ASSETS> = {
 };
 
 const OfficeCanvas: React.FC = () => {
+  const { user, markOnboardingDone } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const carpetPatternRef = useRef<CanvasPattern | null>(null);
   const mountedRef = useRef(false);
@@ -287,10 +291,12 @@ const OfficeCanvas: React.FC = () => {
   const animationRef = useRef<number | undefined>(undefined);
   const dimensionsRef = useRef({ width: 0, height: 0 });
 
-  // Onboarding state
-  const [onboardingDone, setOnboardingDone] = useState(false);
-  const [ceoName, setCeoName] = useState('You');
-  const [ceoSprite, setCeoSprite] = useState<'avatar1' | 'avatar2' | 'avatar3'>('avatar1');
+  // Onboarding state — restore from auth context if already completed
+  const [onboardingDone, setOnboardingDone] = useState(user?.onboardingDone ?? false);
+  const [ceoName, setCeoName] = useState(user?.displayName ?? 'You');
+  const [ceoSprite, setCeoSprite] = useState<'avatar1' | 'avatar2' | 'avatar3'>(
+    (user?.avatarId as 'avatar1' | 'avatar2' | 'avatar3') ?? 'avatar1'
+  );
 
   // Desk configuration state
   const [desks, setDesks] = useState<Zone[]>(DEFAULT_DESKS);
@@ -383,12 +389,17 @@ const OfficeCanvas: React.FC = () => {
 
   const resetAgents = useCallback((width: number, height: number) => {
     const zones = calculateZones(width, height);
-    return INITIAL_AGENTS.map(agent => ({
-      ...agent,
-      x: zones[agent.zone].x + agent.deskOffset.x,
-      y: zones[agent.zone].y + agent.deskOffset.y
-    }));
-  }, [calculateZones]);
+    return INITIAL_AGENTS.map(agent => {
+      // If onboarding is done, restore CEO name + avatar from auth
+      const isCeo = agent.id === 'ceo';
+      return {
+        ...agent,
+        ...(isCeo && onboardingDone ? { name: ceoName, avatar: ceoSprite } : {}),
+        x: zones[agent.zone].x + agent.deskOffset.x,
+        y: zones[agent.zone].y + agent.deskOffset.y,
+      };
+    });
+  }, [calculateZones, onboardingDone, ceoName, ceoSprite]);
 
   const addLogEntry = useCallback((message: string) => {
     setTaskLog(prev => [`[${new Date().toLocaleTimeString()}] ${message}`, ...prev].slice(0, 20));
@@ -1084,6 +1095,18 @@ const OfficeCanvas: React.FC = () => {
         ctx.fillRect(0, 0, width, height);
       }
 
+      // ── Office wall (top border) ──────────────────────────────
+      const wallImg = sprites['officeWall'];
+      if (wallImg && wallImg.complete && wallImg.naturalWidth > 0) {
+        const WALL_H = 110; // display height in px
+        const aspectRatio = wallImg.naturalWidth / wallImg.naturalHeight;
+        const tileW = Math.round(WALL_H * aspectRatio);
+        // Tile the wall horizontally across the full canvas width
+        for (let wx = 0; wx < width; wx += tileW) {
+          ctx.drawImage(wallImg, wx, 0, tileW, WALL_H);
+        }
+      }
+
       // Draw zones with furniture
       // Note: desk sprites already include monitors; only draw monitors on fallback (handled in drawDesk)
       Object.values(zones).forEach(zone => {
@@ -1110,16 +1133,22 @@ const OfficeCanvas: React.FC = () => {
         }
       });
 
-      // Title
+      // Title (rendered on the wall)
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 2;
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 32px sans-serif';
+      ctx.font = 'bold 30px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Agent Desk', width / 2, 45);
+      ctx.fillText('Agent Desk', width / 2, 50);
+      ctx.shadowBlur = 0;
 
       // Subtitle
-      ctx.fillStyle = '#666';
-      ctx.font = '13px sans-serif';
-      ctx.fillText('AI Agency Operations Center', width / 2, 68);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('AI Agency Operations Center', width / 2, 70);
+      ctx.restore();
     };
 
     const loop = (time: number) => {
@@ -1156,11 +1185,22 @@ const OfficeCanvas: React.FC = () => {
     addLogEntry('Office reset');
   };
 
-  const handleOnboardingComplete = () => {
+  const handleOnboardingComplete = async () => {
+    const name = ceoName || 'You';
     setAgents(prev => prev.map(a =>
-      a.id === 'ceo' ? { ...a, name: ceoName || 'You', avatar: ceoSprite } : a
+      a.id === 'ceo' ? { ...a, name, avatar: ceoSprite } : a
     ));
     setOnboardingDone(true);
+
+    // Persist to backend + auth context
+    try {
+      const { completeOnboarding } = await import('../api/auth');
+      await completeOnboarding(name, ceoSprite);
+      markOnboardingDone(name, ceoSprite);
+    } catch (err) {
+      console.error('Failed to save onboarding:', err);
+      // Non-blocking — user can still use the office
+    }
   };
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1736,80 +1776,11 @@ const OfficeCanvas: React.FC = () => {
         />
       )}
 
-      {/* Account Settings Modal */}
-      {showAccountSettings && (
-        <div className="task-form-overlay" onClick={() => setShowAccountSettings(false)}>
-          <div className="task-form" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2>Account Settings</h2>
-              <button className="close-btn" onClick={() => setShowAccountSettings(false)}>✕</button>
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', color: '#888', fontSize: '13px', marginBottom: '8px' }}>Display Name</label>
-              <input
-                type="text"
-                defaultValue="You"
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: 'rgba(0,0,0,0.5)',
-                  border: '1px solid #444',
-                  borderRadius: '6px',
-                  color: '#fff'
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', color: '#888', fontSize: '13px', marginBottom: '8px' }}>Email</label>
-              <input
-                type="email"
-                placeholder="your@email.com"
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: 'rgba(0,0,0,0.5)',
-                  border: '1px solid #444',
-                  borderRadius: '6px',
-                  color: '#fff'
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', color: '#888', fontSize: '13px', marginBottom: '8px' }}>Timezone</label>
-              <select style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.5)', border: '1px solid #444', borderRadius: '6px', color: '#fff' }}>
-                <option>UTC</option>
-                <option>GMT+8 (Asia/Shanghai)</option>
-                <option>GMT+0 (London)</option>
-                <option>GMT-5 (New York)</option>
-                <option>GMT-8 (Los Angeles)</option>
-              </select>
-            </div>
-
-            <div style={{ borderTop: '1px solid #333', paddingTop: '20px', marginTop: '20px' }}>
-              <button
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: 'transparent',
-                  border: '1px solid #ff6b6b',
-                  borderRadius: '6px',
-                  color: '#ff6b6b',
-                  cursor: 'pointer'
-                }}
-              >
-                Log Out
-              </button>
-            </div>
-
-            <div className="form-buttons" style={{ marginTop: '20px' }}>
-              <button onClick={() => setShowAccountSettings(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Account Settings Modal (with logout + delete account) */}
+      <AccountSettingsModal
+        isOpen={showAccountSettings}
+        onClose={() => setShowAccountSettings(false)}
+      />
 
       {/* Office Footer */}
       <div className="office-footer">

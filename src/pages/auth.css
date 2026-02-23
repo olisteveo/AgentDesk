@@ -1,0 +1,245 @@
+/* ═══════════════════════════════════════════════════════════
+   Auth Pages — shared styles for Login + Register
+   Design tokens match OfficeCanvas.css (dark glass-morphic)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Page layout ────────────────────────────────────────── */
+
+.auth-page {
+  min-height: 100vh;
+  background: #050510;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 460px;
+}
+
+/* ── Card ────────────────────────────────────────────────── */
+
+.auth-card {
+  background: rgba(0, 0, 0, 0.85);
+  padding: 48px 40px;
+  border-radius: 16px;
+  border: 1px solid #333;
+  backdrop-filter: blur(15px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.3s;
+}
+
+.auth-card:hover {
+  border-color: #444;
+}
+
+/* ── Logo + heading ─────────────────────────────────────── */
+
+.auth-logo {
+  display: block;
+  margin: 0 auto 28px;
+  width: 100px;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.auth-title {
+  font-size: 26px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 6px;
+  text-align: center;
+}
+
+.auth-subtitle {
+  font-size: 14px;
+  color: #888;
+  margin: 0 0 32px;
+  text-align: center;
+}
+
+/* ── Form ────────────────────────────────────────────────── */
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── Field group ─────────────────────────────────────────── */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.form-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 13px 14px;
+  font-size: 15px;
+  color: #fff;
+  font-family: inherit;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #667eea;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.form-input::placeholder {
+  color: #555;
+}
+
+/* ── Errors ──────────────────────────────────────────────── */
+
+.form-error {
+  color: #ff6b6b;
+  font-size: 12px;
+}
+
+.form-error-global {
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #ff6b6b;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+/* ── Button ──────────────────────────────────────────────── */
+
+.auth-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin-top: 4px;
+}
+
+.auth-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.auth-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.auth-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Footer links ────────────────────────────────────────── */
+
+/* ── Divider ───────────────────────────────────────────── */
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  gap: 12px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #333;
+}
+
+.auth-divider span {
+  color: #666;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.auth-footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+}
+
+.auth-link {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.auth-link:hover {
+  color: #9b8ce8;
+}
+
+/* ── Inline links (e.g. "Forgot password?") ──────────────── */
+
+.auth-inline-link {
+  display: block;
+  text-align: right;
+  margin-top: -8px;
+}
+
+/* ── Loading spinner (shared with ProtectedRoute) ────────── */
+
+.auth-loading {
+  min-height: 100vh;
+  background: #050510;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #888;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.auth-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #333;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: auth-spin 0.8s linear infinite;
+}
+
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 520px) {
+  .auth-card {
+    padding: 32px 24px;
+  }
+
+  .auth-title {
+    font-size: 22px;
+  }
+}

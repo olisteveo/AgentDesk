@@ -210,14 +210,14 @@
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 20px solid #111128;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   z-index: 9999;
-  padding: 0 80px 0 20px;
+  padding: 0 140px 0 20px;
 }
 
 .top-nav button {
@@ -277,6 +277,35 @@
 .top-nav .user-icon:hover {
   background: rgba(102, 126, 234, 0.3);
   border-color: rgba(102, 126, 234, 0.5);
+}
+
+.top-nav .top-nav-user-name {
+  position: absolute;
+  right: 130px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.top-nav .top-nav-logout {
+  position: absolute;
+  right: 66px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 14px !important;
+  font-size: 12px !important;
+  background: rgba(255, 80, 80, 0.1) !important;
+  border-color: rgba(255, 80, 80, 0.25) !important;
+  color: rgba(255, 120, 120, 0.9) !important;
+}
+
+.top-nav .top-nav-logout:hover {
+  background: rgba(255, 80, 80, 0.25) !important;
+  border-color: rgba(255, 80, 80, 0.5) !important;
+  color: #ff6b6b !important;
 }
 
 /* Agents Panel - Right Side */
