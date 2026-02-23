@@ -20,6 +20,13 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   { id: 'nano-banana', name: 'Nano Banana', provider: 'custom', color: '#feca57' }
 ];
 
+export const PROVIDERS_LIST = [
+  { id: 'openai', name: 'OpenAI', models: ['gpt-4.1', 'gpt-4.1-mini', 'codex'] },
+  { id: 'anthropic', name: 'Anthropic', models: ['claude-opus-4.6', 'claude-sonnet-4'] },
+  { id: 'moonshot', name: 'Moonshot', models: ['kimi-k2.5'] },
+  { id: 'google', name: 'Google', models: ['gemini-pro', 'gemini-ultra'] }
+];
+
 export const DEFAULT_SUBSCRIPTIONS: Subscription[] = [
   {
     id: '1',

@@ -1,0 +1,346 @@
+.hire-wizard-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.hire-wizard {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 550px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #fff;
+}
+
+.hire-wizard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.hire-wizard-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.hire-wizard-progress {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.progress-step {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #333;
+  transition: background 0.3s;
+}
+
+.progress-step.active {
+  background: #667eea;
+}
+
+.hire-wizard-step-label {
+  color: #888;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+}
+
+.hire-wizard-body {
+  min-height: 200px;
+}
+
+/* Cards for providers/models */
+.wizard-card {
+  padding: 16px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.wizard-card:hover {
+  border-color: #555;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.wizard-card.selected {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+}
+
+.wizard-card strong {
+  color: #fff;
+}
+
+.wizard-card-sub {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.wizard-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wizard-card-price {
+  color: #888;
+  font-size: 12px;
+}
+
+.wizard-card-provider {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.connected-badge {
+  color: #1dd1a1;
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+/* Form elements */
+.wizard-section {
+  margin-bottom: 16px;
+}
+
+.wizard-label {
+  color: #aaa;
+  font-size: 13px;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.wizard-hint {
+  color: #888;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.wizard-divider {
+  text-align: center;
+  color: #555;
+  margin: 12px 0;
+  font-size: 12px;
+}
+
+.wizard-api-key {
+  margin-top: 16px;
+}
+
+.wizard-input {
+  width: 100%;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.wizard-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.wizard-field {
+  margin-bottom: 20px;
+}
+
+/* Summary card */
+.wizard-summary {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #333;
+  margin-top: 20px;
+}
+
+.wizard-summary-title {
+  color: #888;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.wizard-summary-grid {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.wizard-summary-label {
+  color: #888;
+}
+
+.wizard-summary-value {
+  color: #fff;
+  font-weight: 500;
+}
+
+/* Navigation */
+.hire-wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #222;
+}
+
+.wizard-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.wizard-btn.primary {
+  background: #667eea;
+  color: #fff;
+}
+
+.wizard-btn.primary:hover {
+  background: #5a6fd6;
+}
+
+.wizard-btn.primary.disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.wizard-btn.secondary {
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+}
+
+.wizard-btn.secondary:hover {
+  border-color: #666;
+  color: #aaa;
+}
+
+.wizard-btn.confirm {
+  background: #1dd1a1;
+  color: #fff;
+  font-weight: bold;
+}
+
+.wizard-btn.confirm:hover {
+  background: #18b88a;
+}
+
+/* Mode tabs */
+.wizard-mode-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #333;
+}
+
+.wizard-mode-tab {
+  flex: 1;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.wizard-mode-tab:hover {
+  color: #aaa;
+}
+
+.wizard-mode-tab.active {
+  color: #fff;
+  border-bottom-color: #667eea;
+}
+
+/* Manage section */
+.manage-section {
+  margin-bottom: 28px;
+}
+
+.manage-section-title {
+  color: #fff;
+  font-size: 16px;
+  margin: 0 0 8px 0;
+}
+
+.manage-empty {
+  text-align: center;
+  padding: 24px;
+  color: #555;
+  font-size: 13px;
+}
+
+.manage-disconnect-btn {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid #ff6b6b;
+  border-radius: 6px;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.manage-disconnect-btn:hover {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.manage-remove-btn {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.manage-remove-btn:hover {
+  text-decoration: underline;
+}
+
+.manage-provider-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.manage-add-provider select {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.manage-add-provider select option {
+  background: #1a1a2e;
+}

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import './OfficeCanvas.css';
+import HireWizard from './modals/HireWizard';
 
 interface Agent {
   id: string;
@@ -154,7 +155,13 @@ const AVAILABLE_MODELS = [
   { id: 'nano-banana', name: 'Nano Banana', provider: 'custom', color: '#feca57' }
 ];
 
-// Two-column layout: CEO always left, agent desks stack down the right column
+
+// Two-column layout: CEO top-left, agent desks alternate right then left
+const LEFT_COL  = 0.32;   // left column x (CEO + even-index desks)
+const RIGHT_COL = 0.68;   // right column x (odd-index desks)
+const START_Y   = 0.18;   // first row y
+const ROW_GAP   = 0.22;   // vertical gap between rows
+
 const calculateDeskLayout = (desks: Zone[]): Zone[] => {
   const ceo     = desks.find(d => d.id === 'ceo');
   const meeting = desks.find(d => d.id === 'meeting');
@@ -162,20 +169,30 @@ const calculateDeskLayout = (desks: Zone[]): Zone[] => {
 
   const layout: Zone[] = [];
 
-  // CEO anchored left column — offset right to clear left sidebar panels
-  if (ceo) layout.push({ ...ceo, x: 0.38, y: 0.20 });
+  // CEO anchored top-left column
+  if (ceo) layout.push({ ...ceo, x: LEFT_COL, y: START_Y });
 
-  // Agent desks stack down the right column
+  // Agent desks alternate: 1st → right, 2nd → left, 3rd → right …
   agentDesks.forEach((desk, i) => {
-    layout.push({ ...desk, x: 0.72, y: 0.20 + i * 0.20 });
+    const isRight = i % 2 === 0;          // first desk goes right
+    const row     = Math.floor(i / 2);    // two desks per row
+    const x       = isRight ? RIGHT_COL : LEFT_COL;
+    // Right-column desks start on the same row as CEO (row 0),
+    // left-column desks start one row below CEO (row 0 + 1)
+    const y       = isRight
+      ? START_Y + row * ROW_GAP
+      : START_Y + (row + 1) * ROW_GAP;
+    layout.push({ ...desk, x, y });
   });
 
   // Meeting room always below everything, centred
   if (meeting) {
-    const lastAgentY = agentDesks.length > 0
-      ? 0.20 + (agentDesks.length - 1) * 0.20
-      : 0.20;
-    const meetingY = Math.min(lastAgentY + 0.28, 0.88);
+    const totalRows = Math.ceil(agentDesks.length / 2);
+    // Account for left-column offset (+1 row) when finding the lowest desk
+    const lowestY = agentDesks.length > 0
+      ? START_Y + totalRows * ROW_GAP
+      : START_Y;
+    const meetingY = Math.min(lowestY + 0.14, 0.88);
     layout.push({ ...meeting, x: 0.50, y: meetingY });
   }
 
@@ -225,6 +242,7 @@ const SPRITE_ASSETS = {
   deskMini: '/assets/desk-mini.png',
   deskStandard: '/assets/desk-standard.png',
   deskPower: '/assets/desk-boss.png',
+  meetingRoom: '/assets/meeting-room.png',
   avatar1: '/assets/avatar-01.png',
   avatar2: '/assets/avatar-02.png',
   avatar3: '/assets/avatar-03.png',
@@ -240,7 +258,7 @@ const ZONE_DESK_SPRITE: Record<string, keyof typeof SPRITE_ASSETS> = {
   desk4: 'deskStandard',
   desk5: 'deskPower',
   desk6: 'deskPower',
-  // 'meeting' intentionally omitted — drawn as placeholder
+  meeting: 'meetingRoom',
 };
 
 // Fallback avatar sprite per agent id (overridden by agent.avatar field)
@@ -251,6 +269,7 @@ const AGENT_AVATAR_SPRITE: Record<string, keyof typeof SPRITE_ASSETS> = {
 const OfficeCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const carpetPatternRef = useRef<CanvasPattern | null>(null);
+  const mountedRef = useRef(false);
   const [sprites, setSprites] = useState<Record<string, HTMLImageElement>>({});
   const [agents, setAgents] = useState<Agent[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
@@ -276,15 +295,16 @@ const OfficeCanvas: React.FC = () => {
   // Desk configuration state
   const [desks, setDesks] = useState<Zone[]>(DEFAULT_DESKS);
   const [deskAssignments, setDeskAssignments] = useState<DeskAssignment[]>(DEFAULT_ASSIGNMENTS);
-  const [showDeskConfig, setShowDeskConfig] = useState(false);
 
   // Settings / Connections state
-  const [showSettings, setShowSettings] = useState(false);
   const [showAccountSettings, setShowAccountSettings] = useState(false);
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'providers' | 'desks'>('providers');
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [newApiKey, setNewApiKey] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState('');
+
+  // Hire Agent wizard state
+  const [showHireWizard, setShowHireWizard] = useState(false);
+
+  // Tooltip state for canvas hover
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; sub: string } | null>(null);
 
   // Meeting room state
   const [showMeetingRoom, setShowMeetingRoom] = useState(false);
@@ -381,18 +401,87 @@ const OfficeCanvas: React.FC = () => {
   }, []);
 
   const getModelForAgent = useCallback((agentId: string): string => {
-    const modelMap: Record<string, string> = {
-      'dev1': 'claude-opus-4.6',
-      'dev2': 'codex',
-      'dev3': 'kimi-k2.5',
-      'dev4': 'gpt-4.1-mini',
-      'research1': 'claude-sonnet-4',
-      'research2': 'kimi-k2.5',
-      'creative': 'nano-banana',
-      'ops': 'claude-sonnet-4'
-    };
-    return modelMap[agentId] || 'gpt-4.1';
+    // Look up via deskAssignments for dynamically created agents
+    const deskId = agentId.replace('agent-', '');
+    const assignment = deskAssignments.find(a => a.deskId === deskId);
+    if (assignment) return assignment.modelId;
+    // Fallback for legacy agents
+    return 'gpt-4.1';
+  }, [deskAssignments]);
+
+  const openHireWizard = useCallback(() => {
+    setShowHireWizard(true);
   }, []);
+
+  const closeHireWizard = useCallback(() => {
+    setShowHireWizard(false);
+  }, []);
+
+  const completeHireWizard = useCallback((data: {
+    model: string;
+    agentName: string;
+    avatar: 'avatar1' | 'avatar2' | 'avatar3';
+    deskName: string;
+  }) => {
+    const { width, height } = dimensionsRef.current;
+
+    // Determine next desk ID
+    const userDesks = desks.filter(d => d.id?.startsWith('desk'));
+    const deskNum = userDesks.length + 1;
+    const deskId = `desk${deskNum}`;
+
+    // Desk color from cycling palette
+    const colors = ['#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#1dd1a1', '#a29bfe'];
+    const deskColor = colors[(deskNum - 1) % colors.length];
+
+    // Create Zone
+    const newDesk: Zone = {
+      id: deskId,
+      x: 0, y: 0,
+      w: 200, h: 100,
+      color: deskColor,
+      label: data.deskName || `Desk ${deskNum}`
+    };
+
+    // Create DeskAssignment
+    const newAssignment: DeskAssignment = {
+      deskId,
+      modelId: data.model,
+      customName: data.deskName || `Desk ${deskNum}`
+    };
+
+    // Create Agent
+    const newAgent: Agent = {
+      id: `agent-${deskId}`,
+      name: data.agentName || 'Agent',
+      role: 'AI Assistant',
+      zone: deskId,
+      x: 0, y: 0,
+      color: deskColor,
+      emoji: '',
+      avatar: data.avatar,
+      deskOffset: { x: 0, y: 10 },
+      isWorking: false
+    };
+
+    // Update desks and position agent via layout
+    const updatedDesks = [...desks, newDesk];
+    setDesks(updatedDesks);
+    setDeskAssignments(prev => [...prev, newAssignment]);
+
+    const layout = calculateDeskLayout(updatedDesks);
+    const deskZone = layout.find(z => z.id === deskId);
+    if (deskZone) {
+      newAgent.x = width * deskZone.x + newAgent.deskOffset.x;
+      newAgent.y = height * deskZone.y + newAgent.deskOffset.y;
+    }
+
+    setAgents(prev => [...prev, newAgent]);
+
+    const modelInfo = AVAILABLE_MODELS.find(m => m.id === data.model);
+    addLogEntry(`Hired "${data.agentName}" (${modelInfo?.name || data.model}) at "${data.deskName || `Desk ${deskNum}`}"`);
+    closeHireWizard();
+  }, [desks, addLogEntry, closeHireWizard]);
 
   const updateTodayCost = useCallback((additionalCost: number) => {
     setTodayApiCost(prev => prev + additionalCost);
@@ -593,19 +682,35 @@ const OfficeCanvas: React.FC = () => {
     if (!canvas) return;
 
     const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const WALL = 200; // side border wall thickness (px)
+      const NAV_H = 64; // nav height + border
+      const FOOTER_H = 80; // footer height
+      canvas.width = window.innerWidth - WALL * 2;
+      canvas.height = window.innerHeight - NAV_H - FOOTER_H;
       dimensionsRef.current = { width: canvas.width, height: canvas.height };
-      // Invalidate cached carpet pattern — context resets on canvas resize
       carpetPatternRef.current = null;
-      setAgents(resetAgents(canvas.width, canvas.height));
+
+      if (!mountedRef.current) {
+        // Initial mount: set CEO from INITIAL_AGENTS
+        mountedRef.current = true;
+        setAgents(resetAgents(canvas.width, canvas.height));
+      } else {
+        // Subsequent resizes: reposition ALL agents (including dynamic ones)
+        const zones = calculateZones(canvas.width, canvas.height);
+        setAgents(prev => prev.map(agent => {
+          const zone = zones[agent.zone];
+          return zone
+            ? { ...agent, x: zone.x + agent.deskOffset.x, y: zone.y + agent.deskOffset.y }
+            : agent;
+        }));
+      }
     };
 
     handleResize();
     window.addEventListener('resize', handleResize);
 
     return () => window.removeEventListener('resize', handleResize);
-  }, [resetAgents]);
+  }, [resetAgents, calculateZones]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -632,32 +737,25 @@ const OfficeCanvas: React.FC = () => {
     const drawDesk = (zone: Zone) => {
       if (zone.id === 'watercooler') return;
 
-      // Meeting room: draw as placeholder until proper assets arrive
+      // Meeting room: render at a larger size than desks
       if (zone.id === 'meeting') {
-        const mW = 220, mH = 80;
-        const mx = Math.round(zone.x - mW / 2);
-        const my = Math.round(zone.y - mH / 2);
+        const meetImg = sprites['meetingRoom'];
+        if (meetImg && meetImg.complete && meetImg.naturalWidth > 0) {
+          const MEETING_H = 140;
+          const mW = Math.round(MEETING_H * (meetImg.naturalWidth / meetImg.naturalHeight));
+          const mH = MEETING_H;
+          const mx = Math.round(zone.x - mW / 2);
+          const my = Math.round(zone.y - mH / 2);
 
-        // Background fill
-        ctx.fillStyle = 'rgba(116, 185, 255, 0.08)';
-        ctx.fillRect(mx, my, mW, mH);
-
-        // Dashed border
-        ctx.strokeStyle = zone.color;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([8, 5]);
-        ctx.strokeRect(mx, my, mW, mH);
-        ctx.setLineDash([]);
-
-        // Label
-        ctx.fillStyle = zone.color;
-        ctx.font = 'bold 13px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Meeting Room', zone.x, zone.y - 6);
-
-        ctx.fillStyle = '#666';
-        ctx.font = '10px sans-serif';
-        ctx.fillText('Assets coming soon', zone.x, zone.y + 10);
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = 'rgba(0,0,0,0.5)';
+          ctx.shadowOffsetY = 6;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(meetImg, mx, my, mW, mH);
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetY = 0;
+          ctx.imageSmoothingEnabled = true;
+        }
         return;
       }
 
@@ -718,7 +816,13 @@ const OfficeCanvas: React.FC = () => {
       const spriteImg = spriteKey ? sprites[spriteKey] : undefined;
       let topOfDesk: number;
       let labelW = 160;
-      if (spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
+      if (zone.id === 'meeting' && spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
+        // Meeting room uses larger MEETING_H=140 instead of DESK_H
+        const MEETING_H = 140;
+        const mW = Math.round(MEETING_H * (spriteImg.naturalWidth / spriteImg.naturalHeight));
+        topOfDesk = zone.y - MEETING_H / 2;
+        labelW = Math.max(mW, 120);
+      } else if (spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
         const { dW, dH } = getDeskDims(spriteImg);
         topOfDesk = zone.y - dH / 2;
         labelW = Math.max(dW, 120);
@@ -834,15 +938,12 @@ const OfficeCanvas: React.FC = () => {
       const avH = AVATAR_PX;
 
       // Position avatar to the RIGHT of the desk sprite.
-      // agent.x is the zone centre; we need the desk's right edge.
-      const deskSpriteKey = agent.zone ? ZONE_DESK_SPRITE[agent.zone] : undefined;
-      const deskSpriteImg = deskSpriteKey ? sprites[deskSpriteKey] : undefined;
-      const deskHalfW = deskSpriteImg && deskSpriteImg.naturalWidth > 0
-        ? Math.round(getDeskDims(deskSpriteImg).dW / 2)
-        : 50;
+      // Use a fixed offset from zone centre so all avatars sit the same
+      // distance from their desk regardless of desk sprite width.
+      const AVATAR_OFFSET_X = 44; // consistent gap from zone centre
 
       // Avatar stands to the right of the desk, vertically centred on desk
-      const avX = Math.round(agent.x + deskHalfW + 8);
+      const avX = Math.round(agent.x + AVATAR_OFFSET_X);
       const avY = Math.round(agent.y - avH / 2 + bob);
 
       // Shadow
@@ -1062,15 +1163,66 @@ const OfficeCanvas: React.FC = () => {
     setOnboardingDone(true);
   };
 
+  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const { width, height } = dimensionsRef.current;
+
+    const layout = calculateDeskLayout(desks);
+    for (const zone of layout) {
+      if (!zone.id) continue;
+      const zx = width * zone.x;
+      const zy = height * zone.y;
+      const hitR = 60; // hover radius around zone centre
+      if (Math.abs(mx - zx) < hitR && Math.abs(my - zy) < hitR) {
+        const agent = agents.find(a => a.zone === zone.id);
+        const assignment = deskAssignments.find(a => a.deskId === zone.id);
+        const modelInfo = assignment ? AVAILABLE_MODELS.find(m => m.id === assignment.modelId) : null;
+        if (agent || modelInfo) {
+          setTooltip({
+            x: e.clientX,
+            y: e.clientY,
+            text: agent ? agent.name : zone.label,
+            sub: modelInfo ? modelInfo.name : (zone.id === 'ceo' ? 'CEO' : ''),
+          });
+          return;
+        }
+      }
+    }
+    setTooltip(null);
+  }, [desks, agents, deskAssignments]);
+
   return (
     <div className="office-canvas-container">
-      <canvas ref={canvasRef} className="office-canvas" />
+      <div className="office-frame">
+        <canvas ref={canvasRef} className="office-canvas"
+          onMouseMove={handleCanvasMouseMove}
+          onMouseLeave={() => setTooltip(null)}
+        />
+      </div>
+
+      {/* Canvas hover tooltip */}
+      {tooltip && (
+        <div className="canvas-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y - 10 }}>
+          <div className="canvas-tooltip-name">{tooltip.text}</div>
+          {tooltip.sub && <div className="canvas-tooltip-model">{tooltip.sub}</div>}
+        </div>
+      )}
 
       {/* Onboarding Modal */}
       {!onboardingDone && (
         <div className="onboarding-overlay">
           <div className="onboarding-modal">
-            <div className="onboarding-logo">🏢</div>
+            <img
+              className="onboarding-logo"
+              src="/assets/office-logo.png"
+              alt="Agent Desk"
+              width={140}
+              height={130}
+            />
             <h1>Welcome to Agent Desk</h1>
             <p className="onboarding-subtitle">Your AI-powered virtual office</p>
 
@@ -1121,13 +1273,13 @@ const OfficeCanvas: React.FC = () => {
       )}
 
       {/* Top Navigation Bar */}
-      <div className="top-nav">
-        <button onClick={() => setShowTaskForm(true)}>New Task</button>
-        <button onClick={() => setShowMeetingRoom(true)}>Meeting Room</button>
-        <button onClick={() => setShowSettings(true)}>Setup</button>
-        <button onClick={togglePause}>{isPaused ? 'Resume' : 'Pause'}</button>
-        <button onClick={resetOffice}>Reset</button>
-        <div className="user-icon" onClick={() => setShowAccountSettings(true)} title="Account Settings">
+      <div className={`top-nav${!onboardingDone ? ' nav-disabled' : ''}`}>
+        <button disabled={!onboardingDone} onClick={() => setShowTaskForm(true)}>New Task</button>
+        <button disabled={!onboardingDone} onClick={() => setShowMeetingRoom(true)}>Meeting Room</button>
+        <button disabled={!onboardingDone} onClick={openHireWizard}>Hire Agent</button>
+        <button disabled={!onboardingDone} onClick={togglePause}>{isPaused ? 'Resume' : 'Pause'}</button>
+        <button disabled={!onboardingDone} onClick={resetOffice}>Reset</button>
+        <div className={`user-icon${!onboardingDone ? ' disabled' : ''}`} onClick={() => onboardingDone && setShowAccountSettings(true)} title="Account Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
@@ -1566,385 +1718,22 @@ const OfficeCanvas: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Desk Configuration Modal */}
-      {showDeskConfig && (
-        <div className="task-form-overlay" onClick={() => setShowDeskConfig(false)}>
-          <div className="task-form" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <h2>Configure Desks</h2>
-            <p style={{ color: '#888', fontSize: '13px', marginBottom: '20px' }}>
-              Assign AI models to desks. Each desk can have one model.
-            </p>
-
-            <div className="form-group">
-              {desks.filter(d => d.id?.startsWith('desk')).map(desk => {
-                const assignment = deskAssignments.find(a => a.deskId === desk.id);
-                const model = AVAILABLE_MODELS.find(m => m.id === assignment?.modelId);
-                return (
-                  <div key={desk.id} style={{ 
-                    background: 'rgba(0,0,0,0.3)', 
-                    padding: '15px', 
-                    borderRadius: '8px',
-                    marginBottom: '12px',
-                    border: '1px solid #333'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                      <strong style={{ color: desk.color }}>{desk.label}</strong>
-                      <span style={{ fontSize: '12px', color: '#888' }}>ID: {desk.id}</span>
-                    </div>
-                    
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                      <select 
-                        value={assignment?.modelId || ''}
-                        onChange={(e) => {
-                          const newAssignments = deskAssignments.filter(a => a.deskId !== desk.id);
-                          if (e.target.value) {
-                            newAssignments.push({
-                              deskId: desk.id!,
-                              modelId: e.target.value,
-                              customName: desk.label
-                            });
-                          }
-                          setDeskAssignments(newAssignments);
-                        }}
-                        style={{ flex: 1 }}
-                      >
-                        <option value="">Select Model...</option>
-                        {AVAILABLE_MODELS.map(m => (
-                          <option key={m.id} value={m.id}>{m.name} ({m.provider})</option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    {model && (
-                      <div style={{ 
-                        marginTop: '10px', 
-                        padding: '8px', 
-                        background: 'rgba(0,0,0,0.3)',
-                        borderRadius: '4px',
-                        fontSize: '12px'
-                      }}>
-                        <span style={{ color: model.color }}>●</span> {model.name} — {model.provider}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="form-buttons">
-              <button onClick={() => setShowDeskConfig(false)}>Done</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="task-form-overlay" onClick={() => setShowSettings(false)}>
-          <div className="task-form" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2>Setup</h2>
-              <button className="close-btn" onClick={() => setShowSettings(false)}>✕</button>
-            </div>
-
-            {/* Settings Tabs */}
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
-              <button
-                onClick={() => setActiveSettingsTab('providers')}
-                style={{
-                  padding: '10px 20px',
-                  background: activeSettingsTab === 'providers' ? '#667eea' : 'transparent',
-                  border: '1px solid #444',
-                  borderRadius: '6px',
-                  color: activeSettingsTab === 'providers' ? '#fff' : '#888',
-                  cursor: 'pointer'
-                }}
-              >
-                AI Providers
-              </button>
-              <button
-                onClick={() => setActiveSettingsTab('desks')}
-                style={{
-                  padding: '10px 20px',
-                  background: activeSettingsTab === 'desks' ? '#667eea' : 'transparent',
-                  border: '1px solid #444',
-                  borderRadius: '6px',
-                  color: activeSettingsTab === 'desks' ? '#fff' : '#888',
-                  cursor: 'pointer'
-                }}
-              >
-                Desk Management
-              </button>
-            </div>
-
-            {/* Providers Tab */}
-            {activeSettingsTab === 'providers' && (
-              <div>
-                <p style={{ color: '#888', fontSize: '13px', marginBottom: '20px' }}>
-                  Connect your AI provider accounts. API keys are encrypted and never shared.
-                </p>
-
-                {/* Available Providers List */}
-                {[
-                  { id: 'openai', name: 'OpenAI', models: ['GPT-4', 'GPT-4o', 'GPT-3.5'] },
-                  { id: 'anthropic', name: 'Anthropic', models: ['Claude Opus', 'Claude Sonnet', 'Claude Haiku'] },
-                  { id: 'moonshot', name: 'Moonshot', models: ['Kimi K2.5'] },
-                  { id: 'google', name: 'Google', models: ['Gemini Pro', 'Gemini Ultra'] }
-                ].map(provider => {
-                  const connection = connections.find(c => c.provider === provider.id);
-                  return (
-                    <div key={provider.id} style={{
-                      background: 'rgba(0,0,0,0.3)',
-                      padding: '20px',
-                      borderRadius: '10px',
-                      marginBottom: '15px',
-                      border: connection?.isConnected ? '1px solid #1dd1a1' : '1px solid #333'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <div>
-                          <strong style={{ color: '#fff', fontSize: '16px' }}>{provider.name}</strong>
-                          {connection?.isConnected && (
-                            <span style={{ color: '#1dd1a1', fontSize: '12px', marginLeft: '10px' }}>● Connected</span>
-                          )}
-                        </div>
-                        {!connection?.isConnected ? (
-                          <button
-                            onClick={() => setSelectedProvider(provider.id)}
-                            style={{
-                              padding: '8px 16px',
-                              background: '#667eea',
-                              border: 'none',
-                              borderRadius: '6px',
-                              color: '#fff',
-                              cursor: 'pointer',
-                              fontSize: '13px'
-                            }}
-                          >
-                            Add API Key
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setConnections(connections.filter(c => c.provider !== provider.id))}
-                            style={{
-                              padding: '8px 16px',
-                              background: 'transparent',
-                              border: '1px solid #ff6b6b',
-                              borderRadius: '6px',
-                              color: '#ff6b6b',
-                              cursor: 'pointer',
-                              fontSize: '13px'
-                            }}
-                          >
-                            Disconnect
-                          </button>
-                        )}
-                      </div>
-
-                      {connection?.isConnected ? (
-                        <div style={{ fontSize: '12px', color: '#888' }}>
-                          <div>Key: {connection.apiKeyMasked}</div>
-                          <div style={{ marginTop: '5px' }}>Available models: {connection.models.join(', ')}</div>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          Available models: {provider.models.join(', ')}
-                        </div>
-                      )}
-
-                      {/* Add API Key Form */}
-                      {selectedProvider === provider.id && !connection?.isConnected && (
-                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #333' }}>
-                          <input
-                            type="password"
-                            placeholder={`Enter ${provider.name} API Key`}
-                            value={newApiKey}
-                            onChange={(e) => setNewApiKey(e.target.value)}
-                            style={{
-                              width: '100%',
-                              padding: '12px',
-                              background: 'rgba(0,0,0,0.5)',
-                              border: '1px solid #444',
-                              borderRadius: '6px',
-                              color: '#fff',
-                              marginBottom: '10px'
-                            }}
-                          />
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <button
-                              onClick={() => {
-                                if (newApiKey) {
-                                  setConnections([...connections, {
-                                    id: Date.now().toString(),
-                                    provider: provider.id as any,
-                                    name: provider.name,
-                                    isConnected: true,
-                                    apiKeyMasked: newApiKey.slice(0, 8) + '...' + newApiKey.slice(-4),
-                                    models: provider.models,
-                                    addedAt: new Date()
-                                  }]);
-                                  setNewApiKey('');
-                                  setSelectedProvider('');
-                                }
-                              }}
-                              style={{
-                                padding: '10px 20px',
-                                background: '#1dd1a1',
-                                border: 'none',
-                                borderRadius: '6px',
-                                color: '#fff',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Connect
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedProvider('');
-                                setNewApiKey('');
-                              }}
-                              style={{
-                                padding: '10px 20px',
-                                background: 'transparent',
-                                border: '1px solid #444',
-                                borderRadius: '6px',
-                                color: '#888',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Desk Management Tab */}
-            {activeSettingsTab === 'desks' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                  <p style={{ color: '#888', fontSize: '13px' }}>
-                    Configure desks with connected AI models. {desks.filter(d => d.id?.startsWith('desk')).length}/6 desks used.
-                  </p>
-                  {desks.filter(d => d.id?.startsWith('desk')).length < 6 && connections.some(c => c.isConnected) && (
-                    <button
-                      onClick={() => {
-                        const deskNum = desks.filter(d => d.id?.startsWith('desk')).length + 1;
-                        const newDesk: Zone = {
-                          id: `desk${deskNum}`,
-                          x: deskNum % 2 === 1 ? 0.30 : 0.70,
-                          y: 0.28 + Math.floor((deskNum - 1) / 2) * 0.18,
-                          w: 200,
-                          h: 100,
-                          color: '#667eea',
-                          label: `Desk ${deskNum}`
-                        };
-                        setDesks([...desks, newDesk]);
-                      }}
-                      style={{
-                        padding: '10px 20px',
-                        background: '#667eea',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: '#fff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      + Add Desk
-                    </button>
-                  )}
-                </div>
-
-                {!connections.some(c => c.isConnected) && (
-                  <div style={{
-                    background: 'rgba(255, 193, 7, 0.1)',
-                    border: '1px solid rgba(255, 193, 7, 0.3)',
-                    padding: '15px',
-                    borderRadius: '8px',
-                    marginBottom: '20px',
-                    color: '#ffc107',
-                    fontSize: '13px'
-                  }}>
-                    Connect at least one AI provider to create desks.
-                  </div>
-                )}
-
-                {desks.filter(d => d.id?.startsWith('desk')).length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                    No desks configured. Click "Add Desk" to create your first workspace.
-                  </div>
-                ) : (
-                  <div>
-                    {desks.filter(d => d.id?.startsWith('desk')).map(desk => {
-                      const assignment = deskAssignments.find(a => a.deskId === desk.id);
-                      const availableModels = connections
-                        .filter(c => c.isConnected)
-                        .flatMap(c => c.models.map(m => ({ name: m, provider: c.provider })));
-
-                      return (
-                        <div key={desk.id} style={{
-                          background: 'rgba(0,0,0,0.3)',
-                          padding: '15px',
-                          borderRadius: '8px',
-                          marginBottom: '12px',
-                          border: '1px solid #333'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                            <strong style={{ color: desk.color }}>{desk.label}</strong>
-                            <button
-                              onClick={() => {
-                                setDesks(desks.filter(d => d.id !== desk.id));
-                                setDeskAssignments(deskAssignments.filter(a => a.deskId !== desk.id));
-                              }}
-                              style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#ff6b6b',
-                                cursor: 'pointer',
-                                fontSize: '12px'
-                              }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-
-                          <select
-                            value={assignment?.modelId || ''}
-                            onChange={(e) => {
-                              const newAssignments = deskAssignments.filter(a => a.deskId !== desk.id);
-                              if (e.target.value) {
-                                newAssignments.push({
-                                  deskId: desk.id!,
-                                  modelId: e.target.value,
-                                  customName: desk.label
-                                });
-                              }
-                              setDeskAssignments(newAssignments);
-                            }}
-                            style={{ width: '100%', padding: '10px' }}
-                          >
-                            <option value="">Select AI Model...</option>
-                            {availableModels.map((model, idx) => (
-                              <option key={idx} value={`${model.provider}-${model.name}`}>
-                                {model.name} ({model.provider})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="form-buttons" style={{ marginTop: '20px' }}>
-              <button onClick={() => setShowSettings(false)}>Close</button>
-            </div>
-          </div>
-        </div>
+      {/* Hire Agent Wizard */}
+      {showHireWizard && (
+        <HireWizard
+          connections={connections}
+          desks={desks}
+          deskAssignments={deskAssignments}
+          onComplete={completeHireWizard}
+          onClose={closeHireWizard}
+          onConnectionCreated={(conn) => setConnections(prev => [...prev, conn])}
+          onConnectionRemoved={(providerId) => setConnections(prev => prev.filter(c => c.provider !== providerId))}
+          onDeskRemoved={(deskId) => {
+            setDesks(prev => prev.filter(d => d.id !== deskId));
+            setDeskAssignments(prev => prev.filter(a => a.deskId !== deskId));
+            setAgents(prev => prev.filter(a => a.zone !== deskId));
+          }}
+        />
       )}
 
       {/* Account Settings Modal */}
@@ -2021,6 +1810,20 @@ const OfficeCanvas: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Office Footer */}
+      <div className="office-footer">
+        <a href="#">Documentation</a>
+        <div className="footer-divider" />
+        <a href="#">Contact</a>
+        <div className="footer-divider" />
+        <a href="#">Licence</a>
+        <div className="footer-divider" />
+        <a href="#">Privacy Policy</a>
+        <div className="footer-divider" />
+        <a href="#">Terms of Service</a>
+        <span className="footer-brand">Agent Desk v1.0</span>
+      </div>
     </div>
   );
 };
