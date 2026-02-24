@@ -261,8 +261,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
               </div>
               <p style={{ color: '#888', fontSize: 13, margin: 0 }}>
                 {isPro
-                  ? '5 users, 10 desks, full analytics, meeting room, whiteboard, priority support'
-                  : '1 user, 2 desks, basic task management, cost overview'}
+                  ? '5 users, 6 desks, 6 providers, full analytics, meeting room, whiteboard, priority support'
+                  : '1 user, 3 desks, 3 providers, basic task management, cost overview'}
               </p>
             </div>
 
@@ -279,7 +279,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                   $0<span style={{ color: '#666', fontSize: 12, fontWeight: 400 }}> forever</span>
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 14px' }}>
-                  {['1 user', '2 desks', 'Basic tasks', 'Cost overview', 'BYOK'].map((f) => (
+                  {['1 user', '3 desks', '3 providers', 'Basic tasks', 'Cost overview', 'BYOK'].map((f) => (
                     <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#aaa', fontSize: 12, padding: '2px 0' }}>
                       <Check size={12} strokeWidth={2.5} style={{ color: '#667eea' }} /> {f}
                     </li>
@@ -318,7 +318,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                   $29<span style={{ color: '#666', fontSize: 12, fontWeight: 400 }}> /month</span>
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 14px' }}>
-                  {['Up to 5 users', '10 desks', 'Advanced tasks', 'Full analytics', 'Meeting room', 'Whiteboard', 'Priority support'].map((f) => (
+                  {['Up to 5 users', '6 desks', '6 providers', 'Advanced tasks', 'Full analytics', 'Meeting room', 'Whiteboard', 'Priority support'].map((f) => (
                     <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#aaa', fontSize: 12, padding: '2px 0' }}>
                       <Check size={12} strokeWidth={2.5} style={{ color: '#667eea' }} /> {f}
                     </li>

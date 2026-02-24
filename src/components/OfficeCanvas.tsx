@@ -3,6 +3,10 @@ import { useAuth } from '../contexts/AuthContext';
 import './OfficeCanvas.css';
 import HireWizard from './modals/HireWizard';
 import { AccountSettingsModal } from './modals/AccountSettingsModal';
+import { listDesks, createDesk, deleteDesk } from '../api/desks';
+import { createTask, runTask as runTaskApi } from '../api/tasks';
+import { sendChat } from '../api/chat';
+import type { Desk as BackendDesk } from '../api/desks';
 
 interface Agent {
   id: string;
@@ -89,73 +93,8 @@ interface DailyCost {
   total: number;
 }
 
-const MODEL_PRICING: Record<string, { input: number; output: number; name: string }> = {
-  'gpt-4.1-mini': { input: 0.000005, output: 0.000015, name: 'GPT-4.1 Mini' },
-  'gpt-4.1': { input: 0.00002, output: 0.00006, name: 'GPT-4.1' },
-  'claude-sonnet-4': { input: 0.00003, output: 0.00015, name: 'Claude Sonnet 4' },
-  'claude-opus-4.6': { input: 0.00015, output: 0.00075, name: 'Claude Opus 4.6' },
-  'kimi-k2.5': { input: 0.00002, output: 0.00006, name: 'Kimi K2.5' },
-  'codex': { input: 0.00003, output: 0.00012, name: 'Codex' },
-  'nano-banana': { input: 0.00001, output: 0.00003, name: 'Nano Banana' }
-};
-
-const DEFAULT_SUBSCRIPTIONS: Subscription[] = [
-  {
-    id: 'openai',
-    service: 'OpenAI',
-    tier: 'Plus',
-    monthlyCost: 20,
-    annualCost: 200,
-    billingCycle: 'monthly',
-    nextBillingDate: '2026-03-15',
-    features: ['GPT-4.1', 'GPT-4.1-mini', 'DALL-E'],
-    active: true
-  },
-  {
-    id: 'anthropic',
-    service: 'Anthropic',
-    tier: 'Pro',
-    monthlyCost: 20,
-    annualCost: 200,
-    billingCycle: 'monthly',
-    nextBillingDate: '2026-03-10',
-    features: ['Claude Sonnet 4', 'Claude Opus 4.6'],
-    active: true
-  },
-  {
-    id: 'moonshot',
-    service: 'Moonshot AI',
-    tier: 'Developer',
-    monthlyCost: 0,
-    annualCost: 0,
-    billingCycle: 'monthly',
-    nextBillingDate: '2026-03-01',
-    features: ['Kimi K2.5', 'Kimi K1.5'],
-    active: true
-  },
-  {
-    id: 'openclaw',
-    service: 'OpenClaw',
-    tier: 'Self-Hosted',
-    monthlyCost: 0,
-    annualCost: 0,
-    billingCycle: 'monthly',
-    nextBillingDate: 'N/A',
-    features: ['Gateway', 'Sub-agents', 'Cron'],
-    active: true
-  }
-];
-
-// Available AI models for desk assignment
-const AVAILABLE_MODELS = [
-  { id: 'claude-opus-4.6', name: 'Claude Opus', provider: 'anthropic', color: '#d4a5a5' },
-  { id: 'claude-sonnet-4', name: 'Claude Sonnet', provider: 'anthropic', color: '#a5b4d4' },
-  { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'openai', color: '#a5d4b4' },
-  { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'openai', color: '#d4d4a5' },
-  { id: 'kimi-k2.5', name: 'Kimi K2.5', provider: 'moonshot', color: '#b4a5d4' },
-  { id: 'codex', name: 'Codex', provider: 'openai', color: '#d4a5d4' },
-  { id: 'nano-banana', name: 'Nano Banana', provider: 'custom', color: '#feca57' }
-];
+// Use shared constants — single source of truth
+import { MODEL_PRICING, AVAILABLE_MODELS, DEFAULT_SUBSCRIPTIONS } from '../utils/constants';
 
 
 // Two-column layout: CEO top-left, agent desks alternate right then left
@@ -209,8 +148,10 @@ const DEFAULT_DESKS: Zone[] = [
 
 // Desk to model assignments - users configure this
 interface DeskAssignment {
-  deskId: string;
+  deskId: string;          // local zone id (desk1, desk2, ...)
+  backendDeskId?: string;  // UUID from backend DB
   modelId: string;
+  agentName?: string;
   customName?: string;
 }
 
@@ -225,14 +166,8 @@ interface Connection {
   addedAt: Date;
 }
 
-const DEFAULT_ASSIGNMENTS: DeskAssignment[] = [
-  { deskId: 'desk1', modelId: 'claude-opus-4.6', customName: 'Research Desk' },
-  { deskId: 'desk2', modelId: 'claude-sonnet-4', customName: 'Writing Desk' },
-  { deskId: 'desk3', modelId: 'kimi-k2.5', customName: 'Dev Desk' },
-  { deskId: 'desk4', modelId: 'gpt-4.1', customName: 'Analysis Desk' },
-  { deskId: 'desk5', modelId: 'codex', customName: 'Code Desk' },
-  { deskId: 'desk6', modelId: 'nano-banana', customName: 'Creative Desk' }
-];
+// No default assignments — loaded from backend on mount
+const DEFAULT_ASSIGNMENTS: DeskAssignment[] = [];
 
 const INITIAL_AGENTS: Agent[] = [
   { id: 'ceo', name: 'You', role: 'CEO', zone: 'ceo', x: 0, y: 0, color: '#ffd700', emoji: '', avatar: 'avatar1', deskOffset: { x: 0, y: 10 }, isWorking: false }
@@ -278,6 +213,8 @@ const OfficeCanvas: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskResults, setTaskResults] = useState<Record<string, string>>({});
+  const [viewingTaskResult, setViewingTaskResult] = useState<string | null>(null);
   const [taskLog, setTaskLog] = useState<string[]>(['Welcome to Agent Desk...']);
   const [isPaused, setIsPaused] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -302,9 +239,8 @@ const OfficeCanvas: React.FC = () => {
   const [desks, setDesks] = useState<Zone[]>(DEFAULT_DESKS);
   const [deskAssignments, setDeskAssignments] = useState<DeskAssignment[]>(DEFAULT_ASSIGNMENTS);
 
-  // Settings / Connections state
+  // Settings state
   const [showAccountSettings, setShowAccountSettings] = useState(false);
-  const [connections, setConnections] = useState<Connection[]>([]);
 
   // Hire Agent wizard state
   const [showHireWizard, setShowHireWizard] = useState(false);
@@ -375,6 +311,88 @@ const OfficeCanvas: React.FC = () => {
     });
   }, []);
 
+  // Load desks from backend on mount — restores agents across page refreshes
+  useEffect(() => {
+    const loadDesks = async () => {
+      try {
+        const backendDesks = await listDesks();
+        if (backendDesks.length === 0) return; // No desks yet — fresh workspace
+
+        const colors = ['#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#1dd1a1', '#a29bfe'];
+        const newDesks: Zone[] = [...DEFAULT_DESKS];
+        const newAssignments: DeskAssignment[] = [];
+        const newAgents: Agent[] = [];
+
+        backendDesks.forEach((bd: BackendDesk, index: number) => {
+          const deskId = `desk${index + 1}`;
+          const deskColor = colors[index % colors.length];
+          const primaryModel = bd.models.find(m => m.is_primary);
+          const modelId = primaryModel?.model_id || bd.models[0]?.model_id || 'gpt-4.1';
+
+          newDesks.push({
+            id: deskId,
+            x: 0, y: 0,
+            w: 200, h: 100,
+            color: deskColor,
+            label: bd.name
+          });
+
+          newAssignments.push({
+            deskId,
+            backendDeskId: bd.id,
+            modelId,
+            agentName: bd.agent_name,
+            customName: bd.name
+          });
+
+          newAgents.push({
+            id: `agent-${deskId}`,
+            name: bd.agent_name,
+            role: 'AI Assistant',
+            zone: deskId,
+            x: 0, y: 0,
+            color: deskColor,
+            emoji: '',
+            avatar: (bd.avatar_id || 'avatar1') as string,
+            deskOffset: { x: 0, y: 10 },
+            isWorking: false
+          });
+        });
+
+        setDesks(newDesks);
+        setDeskAssignments(newAssignments);
+
+        // Position agents once dimensions are available
+        const { width, height } = dimensionsRef.current;
+        if (width > 0 && height > 0) {
+          const layout = calculateDeskLayout(newDesks);
+          const positioned = newAgents.map(agent => {
+            const zone = layout.find(z => z.id === agent.zone);
+            if (zone) {
+              return {
+                ...agent,
+                x: width * zone.x + agent.deskOffset.x,
+                y: height * zone.y + agent.deskOffset.y
+              };
+            }
+            return agent;
+          });
+          setAgents(prev => [...prev, ...positioned]);
+        } else {
+          // Dimensions not ready yet — agents will be positioned by resize handler
+          setAgents(prev => [...prev, ...newAgents]);
+        }
+      } catch (err) {
+        console.error('Failed to load desks from backend:', err);
+      }
+    };
+
+    if (onboardingDone) {
+      loadDesks();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardingDone]);
+
   const calculateZones = useCallback((width: number, height: number): Record<string, Zone> => {
     const layout = calculateDeskLayout(desks);
     return layout.reduce((acc, desk) => ({
@@ -428,7 +446,7 @@ const OfficeCanvas: React.FC = () => {
     setShowHireWizard(false);
   }, []);
 
-  const completeHireWizard = useCallback((data: {
+  const completeHireWizard = useCallback(async (data: {
     model: string;
     agentName: string;
     avatar: 'avatar1' | 'avatar2' | 'avatar3';
@@ -445,6 +463,24 @@ const OfficeCanvas: React.FC = () => {
     const colors = ['#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#1dd1a1', '#a29bfe'];
     const deskColor = colors[(deskNum - 1) % colors.length];
 
+    // Save desk to backend first
+    let backendDeskId: string | undefined;
+    try {
+      const backendDesk = await createDesk({
+        name: data.deskName || `Desk ${deskNum}`,
+        agentName: data.agentName || 'Agent',
+        agentColor: deskColor,
+        avatarId: data.avatar,
+        deskType: 'mini',
+        models: [data.model],
+      });
+      backendDeskId = backendDesk.id;
+    } catch (err) {
+      console.error('Failed to save desk to backend:', err);
+      addLogEntry(`Failed to create desk — check your connection`);
+      return; // Don't add locally if backend fails
+    }
+
     // Create Zone
     const newDesk: Zone = {
       id: deskId,
@@ -454,10 +490,12 @@ const OfficeCanvas: React.FC = () => {
       label: data.deskName || `Desk ${deskNum}`
     };
 
-    // Create DeskAssignment
+    // Create DeskAssignment with backend ID
     const newAssignment: DeskAssignment = {
       deskId,
+      backendDeskId,
       modelId: data.model,
+      agentName: data.agentName,
       customName: data.deskName || `Desk ${deskNum}`
     };
 
@@ -508,63 +546,141 @@ const OfficeCanvas: React.FC = () => {
     return getMonthlySubscriptionTotal() / 30;
   }, [getMonthlySubscriptionTotal]);
 
-  const assignTask = useCallback(() => {
+  const assignTask = useCallback(async () => {
     if (!selectedAgent || !taskTitle) return;
 
     const modelId = getModelForAgent(selectedAgent);
-    const estimatedCost = calculateTaskCost(modelId);
+    const agent = agents.find(a => a.id === selectedAgent);
+    const agentName = agent?.name || 'Agent';
+    const capturedTitle = taskTitle;
+    const capturedDesc = taskDescription;
+    const capturedAgent = selectedAgent;
 
-    const newTask: Task = {
+    // Resolve the backend desk ID for this agent
+    const localDeskId = selectedAgent.replace('agent-', '');
+    const assignment = deskAssignments.find(a => a.deskId === localDeskId);
+    const backendDeskId = assignment?.backendDeskId;
+
+    if (!backendDeskId) {
+      addLogEntry(`Cannot run task — desk not synced to backend`);
+      return;
+    }
+
+    // Create local task immediately for UI feedback
+    const localTask: Task = {
       id: `task-${Date.now()}`,
-      name: taskTitle,
-      description: taskDescription,
-      assignee: selectedAgent,
+      name: capturedTitle,
+      description: capturedDesc,
+      assignee: capturedAgent,
       status: 'in-progress',
       createdAt: Date.now(),
-      cost: estimatedCost,
       modelUsed: MODEL_PRICING[modelId]?.name || modelId
     };
 
-    setTasks(prev => [...prev, newTask]);
-    updateTodayCost(estimatedCost);
+    setTasks(prev => [...prev, localTask]);
+    addLogEntry(`Task "${capturedTitle}" assigned to ${agentName} (${MODEL_PRICING[modelId]?.name})`);
 
-    const agentName = agents.find(a => a.id === selectedAgent)?.name;
-    addLogEntry(`📋 Task "${taskTitle}" assigned to ${agentName} (${MODEL_PRICING[modelId]?.name}) - Est. $${estimatedCost.toFixed(4)}`);
-
-    setAgents(prev => prev.map(agent => {
-      if (agent.id === selectedAgent) {
-        const zones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
+    // Move agent to their desk and start working animation
+    const zones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
+    const agentZone = zones[localDeskId];
+    setAgents(prev => prev.map(a => {
+      if (a.id === capturedAgent) {
         return {
-          ...agent,
-          targetX: zones.ops.x,
-          targetY: zones.ops.y + 20,
-          currentTask: newTask,
-          isWorking: true
+          ...a,
+          currentTask: localTask,
+          isWorking: true,
+          targetX: agentZone ? agentZone.x + a.deskOffset.x : a.x,
+          targetY: agentZone ? agentZone.y + a.deskOffset.y : a.y,
         };
       }
-      return agent;
+      return a;
     }));
-
-    setTimeout(() => {
-      setAgents(prev => prev.map(agent => {
-        if (agent.id === selectedAgent) {
-          const zones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
-          return {
-            ...agent,
-            targetX: zones[agent.zone].x + agent.deskOffset.x,
-            targetY: zones[agent.zone].y + agent.deskOffset.y
-          };
-        }
-        return agent;
-      }));
-      addLogEntry(`${agentName} completed "${taskTitle}" - $${estimatedCost.toFixed(4)}`);
-    }, 2000);
 
     setShowTaskForm(false);
     setTaskTitle('');
     setTaskDescription('');
     setSelectedAgent('');
-  }, [selectedAgent, taskTitle, taskDescription, agents, addLogEntry, calculateZones, getModelForAgent, calculateTaskCost, updateTodayCost]);
+
+    // Create task in backend and run it
+    try {
+      const backendTask = await createTask({
+        title: capturedTitle,
+        description: capturedDesc || undefined,
+        deskId: backendDeskId,
+        assignedModelId: modelId,
+      });
+
+      const result = await runTaskApi(backendTask.id);
+
+      // Update local task with real cost and result
+      setTasks(prev => prev.map(t =>
+        t.id === localTask.id
+          ? { ...t, status: 'completed', cost: result.costUsd, modelUsed: MODEL_PRICING[result.model]?.name || result.model }
+          : t
+      ));
+
+      updateTodayCost(result.costUsd);
+      addLogEntry(`${agentName} completed "${capturedTitle}" — $${result.costUsd.toFixed(4)} (${result.latencyMs}ms)`);
+
+      // Store the AI result for display
+      setTaskResults(prev => ({ ...prev, [localTask.id]: result.result }));
+
+      // Walk agent to CEO desk to report back
+      const ceoZone = zones.ceo;
+      if (ceoZone) {
+        setAgents(prev => prev.map(a => {
+          if (a.id === capturedAgent) {
+            return {
+              ...a,
+              currentTask: undefined,
+              isWorking: false,
+              targetX: ceoZone.x + 60,  // stand next to CEO
+              targetY: ceoZone.y + 10,
+            };
+          }
+          return a;
+        }));
+
+        // After a pause at CEO desk, return agent to their own desk
+        setTimeout(() => {
+          const freshZones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
+          const homeZone = freshZones[localDeskId];
+          setAgents(prev => prev.map(a => {
+            if (a.id === capturedAgent) {
+              return {
+                ...a,
+                targetX: homeZone ? homeZone.x + a.deskOffset.x : a.x,
+                targetY: homeZone ? homeZone.y + a.deskOffset.y : a.y,
+              };
+            }
+            return a;
+          }));
+        }, 3000);
+      } else {
+        // No CEO zone — just stop working
+        setAgents(prev => prev.map(a => {
+          if (a.id === capturedAgent) {
+            return { ...a, currentTask: undefined, isWorking: false };
+          }
+          return a;
+        }));
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
+      setTasks(prev => prev.map(t =>
+        t.id === localTask.id ? { ...t, status: 'completed' } : t
+      ));
+      addLogEntry(`Task "${capturedTitle}" failed: ${errMsg}`);
+
+      // On failure, stop working and stay at desk
+      setAgents(prev => prev.map(a => {
+        if (a.id === capturedAgent) {
+          return { ...a, currentTask: undefined, isWorking: false };
+        }
+        return a;
+      }));
+    }
+  }, [selectedAgent, taskTitle, taskDescription, agents, deskAssignments, addLogEntry, getModelForAgent, calculateZones, updateTodayCost]);
 
   // Meeting room functions
   const scrollToBottom = useCallback(() => {
@@ -623,12 +739,13 @@ const OfficeCanvas: React.FC = () => {
   const sendChatMessage = useCallback(async () => {
     if (!chatInput.trim() || !activeMeeting) return;
 
+    const userContent = chatInput.trim();
     const newMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: 'user',
       senderName: 'You',
       senderAvatar: '👔',
-      content: chatInput.trim(),
+      content: userContent,
       timestamp: Date.now(),
       isUser: true
     };
@@ -640,28 +757,65 @@ const OfficeCanvas: React.FC = () => {
     setChatInput('');
     scrollToBottom();
 
-    // TODO: Connect to local OpenClaw when available
-    // For now, show a placeholder that OpenClaw integration is coming
+    // Send message to each AI participant via backend proxy
+    for (const participantId of activeMeeting.participants) {
+      const agent = agents.find(a => a.id === participantId);
+      if (!agent || agent.id === 'ceo') continue;
 
-    if (selectedParticipants.includes('ops')) {
-      setTimeout(() => {
-        const placeholderMessage: ChatMessage = {
-          id: `msg-${Date.now()}-ops`,
-          senderId: 'ops',
-          senderName: 'OpenClaw',
-          senderAvatar: '🦅',
-          content: "👋 I'm OpenClaw! I'll be able to help you when running locally on your Mac Mini. For now, this is a preview of the meeting room.",
+      const localDeskId = participantId.replace('agent-', '');
+      const assignment = deskAssignments.find(a => a.deskId === localDeskId);
+      const backendDeskId = assignment?.backendDeskId;
+
+      if (!backendDeskId) continue; // Skip agents without backend desks
+
+      // Build conversation history for this agent
+      const chatHistory = activeMeeting.messages
+        .filter(m => m.senderId !== 'system')
+        .map(m => ({
+          role: (m.isUser ? 'user' : 'assistant') as 'user' | 'assistant',
+          content: m.isUser ? m.content : `[${m.senderName}]: ${m.content}`
+        }));
+      chatHistory.push({ role: 'user' as const, content: userContent });
+
+      try {
+        const response = await sendChat(backendDeskId, chatHistory);
+
+        const agentMessage: ChatMessage = {
+          id: `msg-${Date.now()}-${participantId}`,
+          senderId: participantId,
+          senderName: agent.name,
+          senderAvatar: agent.avatar || '🤖',
+          content: response.content,
+          timestamp: Date.now(),
+          isUser: false
+        };
+
+        setActiveMeeting(prev => {
+          if (!prev) return null;
+          return { ...prev, messages: [...prev.messages, agentMessage] };
+        });
+
+        updateTodayCost(response.costUsd);
+        scrollToBottom();
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Failed to get response';
+        const errorMessage: ChatMessage = {
+          id: `msg-${Date.now()}-${participantId}-err`,
+          senderId: participantId,
+          senderName: agent.name,
+          senderAvatar: agent.avatar || '🤖',
+          content: `[Error: ${errMsg}]`,
           timestamp: Date.now(),
           isUser: false
         };
         setActiveMeeting(prev => {
           if (!prev) return null;
-          return { ...prev, messages: [...prev.messages, placeholderMessage] };
+          return { ...prev, messages: [...prev.messages, errorMessage] };
         });
         scrollToBottom();
-      }, 500);
+      }
     }
-  }, [chatInput, activeMeeting, selectedParticipants, scrollToBottom]);
+  }, [chatInput, activeMeeting, agents, deskAssignments, scrollToBottom, updateTodayCost]);
 
   const endMeeting = useCallback(() => {
     if (!activeMeeting) return;
@@ -1328,23 +1482,87 @@ const OfficeCanvas: React.FC = () => {
       </div>
 
       <div className="left-sidebar">
-        <div className="ui-panel" onClick={() => setShowWhiteboard(true)} style={{ cursor: 'pointer' }}>
-          <h1>Agent Desk</h1>
-          <p>AI Agency Dashboard</p>
-          <div className="task-log">
-            {taskLog.map((entry, i) => (
-              <div key={i} className="task-entry">{entry}</div>
-            ))}
+        {/* Live Task Feed */}
+        <div className="ui-panel task-feed-panel">
+          <div className="task-feed-header">
+            <h3>Live Feed</h3>
+            <span className="task-feed-count">
+              {tasks.filter(t => t.status === 'in-progress').length > 0 && (
+                <span className="pulse-dot" />
+              )}
+              {tasks.filter(t => t.status === 'in-progress').length} active
+            </span>
           </div>
-          <div style={{ marginTop: '10px', fontSize: '11px', color: '#666', textAlign: 'center' }}>
-            Click to open whiteboard
+
+          {/* Active tasks with controls */}
+          {tasks.filter(t => t.status === 'in-progress').length > 0 && (
+            <div className="active-tasks-feed">
+              {tasks.filter(t => t.status === 'in-progress').map(task => {
+                const agent = agents.find(a => a.id === task.assignee);
+                return (
+                  <div key={task.id} className="feed-task active">
+                    <div className="feed-task-header">
+                      <span className="feed-task-status running">Running</span>
+                      <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+                    </div>
+                    <div className="feed-task-title">{task.name}</div>
+                    <div className="feed-task-model">{task.modelUsed}</div>
+                    <div className="feed-task-elapsed">
+                      {Math.round((Date.now() - task.createdAt) / 1000)}s elapsed
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Completed/failed tasks */}
+          {tasks.filter(t => t.status === 'completed').length > 0 && (
+            <div className="completed-tasks-feed">
+              {tasks.filter(t => t.status === 'completed').slice(-5).reverse().map(task => {
+                const agent = agents.find(a => a.id === task.assignee);
+                const hasResult = !!taskResults[task.id];
+                return (
+                  <div key={task.id} className={`feed-task completed${hasResult ? ' has-result' : ''}`}
+                       onClick={() => hasResult && setViewingTaskResult(task.id)}>
+                    <div className="feed-task-header">
+                      <span className="feed-task-status done">Done</span>
+                      <span className="feed-task-cost">${task.cost?.toFixed(4) || '—'}</span>
+                    </div>
+                    <div className="feed-task-title">{task.name}</div>
+                    <div className="feed-task-meta">
+                      <span>{agent?.name}</span>
+                      <span>{task.modelUsed}</span>
+                    </div>
+                    {hasResult && (
+                      <div className="feed-task-view">Click to view result</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {tasks.length === 0 && (
+            <div className="feed-empty">No tasks yet — assign one to get started</div>
+          )}
+
+          {/* Activity log */}
+          <div className="activity-log">
+            <div className="activity-log-header" onClick={() => setShowWhiteboard(true)} style={{ cursor: 'pointer' }}>
+              Activity Log
+            </div>
+            <div className="task-log">
+              {taskLog.slice(0, 8).map((entry, i) => (
+                <div key={i} className="task-entry">{entry}</div>
+              ))}
+            </div>
           </div>
         </div>
 
         <div className="stats-panel" onClick={() => setShowCostPanel(true)} style={{ cursor: 'pointer' }}>
-          <h3>Active Tasks: {tasks.filter(t => t.status === 'in-progress').length}</h3>
-          <h3>Completed: {tasks.filter(t => t.status === 'completed').length}</h3>
-          <h3>Total Agents: {agents.length}</h3>
+          <h3>Active: {tasks.filter(t => t.status === 'in-progress').length} | Done: {tasks.filter(t => t.status === 'completed').length}</h3>
+          <h3>Agents: {agents.filter(a => a.id !== 'ceo').length}</h3>
           <div className="cost-summary">
             <h3>Today's Cost</h3>
             <div className="cost-amount">${(todayApiCost + getDailySubscriptionShare()).toFixed(4)}</div>
@@ -1533,6 +1751,38 @@ const OfficeCanvas: React.FC = () => {
                   <div className="no-tasks">No tasks with cost tracking yet</div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task Result Viewer */}
+      {viewingTaskResult && taskResults[viewingTaskResult] && (
+        <div className="task-result-overlay" onClick={() => setViewingTaskResult(null)}>
+          <div className="task-result-modal" onClick={e => e.stopPropagation()}>
+            <div className="task-result-header">
+              <h2>Task Result</h2>
+              <button className="close-btn" onClick={() => setViewingTaskResult(null)}>✕</button>
+            </div>
+            <div className="task-result-info">
+              {(() => {
+                const task = tasks.find(t => t.id === viewingTaskResult);
+                const agent = task ? agents.find(a => a.id === task.assignee) : null;
+                return task ? (
+                  <>
+                    <div className="result-meta">
+                      <span className="result-task-title">{task.name}</span>
+                      <span className="result-agent">{agent?.name}</span>
+                      <span className="result-model">{task.modelUsed}</span>
+                      {task.cost !== undefined && <span className="result-cost">${task.cost.toFixed(4)}</span>}
+                    </div>
+                    {task.description && <div className="result-description">{task.description}</div>}
+                  </>
+                ) : null;
+              })()}
+            </div>
+            <div className="task-result-content">
+              <pre>{taskResults[viewingTaskResult]}</pre>
             </div>
           </div>
         </div>
@@ -1761,14 +2011,20 @@ const OfficeCanvas: React.FC = () => {
       {/* Hire Agent Wizard */}
       {showHireWizard && (
         <HireWizard
-          connections={connections}
           desks={desks}
           deskAssignments={deskAssignments}
           onComplete={completeHireWizard}
           onClose={closeHireWizard}
-          onConnectionCreated={(conn) => setConnections(prev => [...prev, conn])}
-          onConnectionRemoved={(providerId) => setConnections(prev => prev.filter(c => c.provider !== providerId))}
-          onDeskRemoved={(deskId) => {
+          onDeskRemoved={async (deskId) => {
+            // Delete from backend first
+            const assignment = deskAssignments.find(a => a.deskId === deskId);
+            if (assignment?.backendDeskId) {
+              try {
+                await deleteDesk(assignment.backendDeskId);
+              } catch (err) {
+                console.error('Failed to delete desk from backend:', err);
+              }
+            }
             setDesks(prev => prev.filter(d => d.id !== deskId));
             setDeskAssignments(prev => prev.filter(a => a.deskId !== deskId));
             setAgents(prev => prev.filter(a => a.zone !== deskId));

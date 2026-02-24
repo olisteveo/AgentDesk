@@ -37,7 +37,8 @@ const PLANS: PlanDef[] = [
     cta: 'Get Started',
     features: [
       '1 user',
-      '2 AI agent desks',
+      '3 AI agent desks',
+      '3 AI provider connections',
       'Basic task management',
       'Basic cost overview',
       'Bring your own API keys',
@@ -54,10 +55,11 @@ const PLANS: PlanDef[] = [
     highlighted: true,
     features: [
       'Up to 5 users',
-      '10 AI agent desks',
+      '6 AI agent desks',
+      '6 AI provider connections',
       'Advanced task management',
       'Full analytics dashboard',
-      'Meeting room',
+      'Meeting room collaboration',
       'Shared whiteboard',
       'Bring your own API keys',
       'Priority email support',
