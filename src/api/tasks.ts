@@ -19,6 +19,7 @@ export interface TaskRow {
   priority: number;
   deadline: string | null;
   result: Record<string, unknown> | null;
+  is_code_task: boolean;
   created_at: string;
   completed_at: string | null;
   agent_name?: string;
@@ -69,6 +70,7 @@ export function createTask(data: {
   assignedModelId?: string;
   priority?: number;
   deadline?: string;
+  isCodeTask?: boolean;
 }): Promise<TaskRow> {
   return apiRequest('/api/tasks', {
     method: 'POST',
@@ -104,7 +106,25 @@ export function runTask(taskId: string): Promise<TaskRunResult> {
   return apiRequest(`/api/tasks/${taskId}/run`, { method: 'POST' });
 }
 
+/** Delete a single task. */
+export function deleteTask(taskId: string): Promise<void> {
+  return apiRequest(`/api/tasks/${taskId}`, { method: 'DELETE' });
+}
+
+/** Delete all tasks for the team. */
+export function clearAllTasks(): Promise<void> {
+  return apiRequest('/api/tasks', { method: 'DELETE' });
+}
+
 /** Get recent task activity log. */
 export function getTaskLog(): Promise<TaskLogEntry[]> {
   return apiRequest('/api/tasks/log');
+}
+
+/** Write code to a temp file on the server (for VS Code open). */
+export function openCode(code: string, language: string): Promise<{ filePath: string }> {
+  return apiRequest('/api/tasks/open-code', {
+    method: 'POST',
+    body: JSON.stringify({ code, language }),
+  });
 }

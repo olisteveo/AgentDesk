@@ -39,10 +39,13 @@ export interface Task {
   name: string;
   description: string;
   assignee: string;
-  status: 'pending' | 'in-progress' | 'completed';
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
   createdAt: number;
   cost?: number;
   modelUsed?: string;
+  errorMessage?: string;
+  backendId?: string;
+  isCodeTask?: boolean;
 }
 
 export interface ChatMessage {
@@ -85,7 +88,9 @@ export interface DailyCost {
 
 export interface DeskAssignment {
   deskId: string;
+  backendDeskId?: string;
   modelId: string;
+  agentName?: string;
   customName?: string;
 }
 

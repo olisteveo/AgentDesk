@@ -4,10 +4,16 @@ import './OfficeCanvas.css';
 import HireWizard from './modals/HireWizard';
 import { AccountSettingsModal } from './modals/AccountSettingsModal';
 import { listDesks, createDesk, deleteDesk } from '../api/desks';
-import { createTask, runTask as runTaskApi } from '../api/tasks';
-import { sendChat } from '../api/chat';
+import { createTask, runTask as runTaskApi, openCode } from '../api/tasks';
 import type { Desk as BackendDesk } from '../api/desks';
-import { ClipboardList, DollarSign, BarChart3, Calendar, Rocket, X, Send, Crown, TrendingUp, Bot, CircleStop } from 'lucide-react';
+import type { Task, DeskAssignment } from '../types';
+import { useActivityLog } from '../hooks/useActivityLog';
+import { useCostTracker } from '../hooks/useCostTracker';
+import { useTaskManager } from '../hooks/useTaskManager';
+import { isCodeRelatedTask } from '../utils/codeDetection';
+import { parseCodeBlocks } from '../utils/parseCodeBlocks';
+import MeetingRoom from './MeetingRoom';
+import { ClipboardList, DollarSign, BarChart3, X, TrendingUp, Bot, Trash2, Rss } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -45,35 +51,7 @@ interface Particle {
   color: string;
 }
 
-interface Task {
-  id: string;
-  name: string;
-  description: string;
-  assignee: string;
-  status: 'pending' | 'in-progress' | 'completed' | 'failed';
-  createdAt: number;
-  cost?: number;
-  modelUsed?: string;
-  errorMessage?: string;
-}
-
-interface ChatMessage {
-  id: string;
-  senderId: string;
-  senderName: string;
-  senderAvatar: string;
-  content: string;
-  timestamp: number;
-  isUser: boolean;
-}
-
-interface Meeting {
-  id: string;
-  topic: string;
-  participants: string[];
-  messages: ChatMessage[];
-  startedAt: number;
-}
+// Meeting types moved to MeetingRoom.tsx
 
 interface Subscription {
   id: string;
@@ -148,15 +126,6 @@ const DEFAULT_DESKS: Zone[] = [
   { id: 'meeting', x: 0.50, y: 0.55, w: 400, h: 120, color: '#74b9ff', label: 'Meeting Room' }
 ];
 
-// Desk to model assignments - users configure this
-interface DeskAssignment {
-  deskId: string;          // local zone id (desk1, desk2, ...)
-  backendDeskId?: string;  // UUID from backend DB
-  modelId: string;
-  agentName?: string;
-  customName?: string;
-}
-
 // AI Provider Connection
 interface Connection {
   id: string;
@@ -211,22 +180,20 @@ const OfficeCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const carpetPatternRef = useRef<CanvasPattern | null>(null);
   const mountedRef = useRef(false);
+  const desksLoadedRef = useRef(false);
   const [sprites, setSprites] = useState<Record<string, HTMLImageElement>>({});
   const [agents, setAgents] = useState<Agent[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [taskResults, setTaskResults] = useState<Record<string, string>>({});
   const [viewingTaskResult, setViewingTaskResult] = useState<string | null>(null);
-  const [taskLog, setTaskLog] = useState<string[]>(['Welcome to Agent Desk...']);
   const [isPaused, setIsPaused] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [showCostPanel, setShowCostPanel] = useState(false);
+  const [showFeedPanel, setShowFeedPanel] = useState(false);
   const [subscriptions] = useState<Subscription[]>(DEFAULT_SUBSCRIPTIONS);
   const [,] = useState<DailyCost[]>([]);
-  const [todayApiCost, setTodayApiCost] = useState<number>(0);
   const animationRef = useRef<number | undefined>(undefined);
   const dimensionsRef = useRef({ width: 0, height: 0 });
 
@@ -241,6 +208,15 @@ const OfficeCanvas: React.FC = () => {
   const [desks, setDesks] = useState<Zone[]>(DEFAULT_DESKS);
   const [deskAssignments, setDeskAssignments] = useState<DeskAssignment[]>(DEFAULT_ASSIGNMENTS);
 
+  // --- Extracted hooks: activity log, cost tracker, task manager ---
+  // Each hook owns its state + backend hydration (loads data on mount)
+  const { taskLog, addLogEntry } = useActivityLog(onboardingDone);
+  const { todayApiCost, updateTodayCost } = useCostTracker(onboardingDone);
+  const { tasks, setTasks, taskResults, setTaskResults, removeTask, clearTasks } = useTaskManager({
+    deskAssignments,
+    onboardingDone,
+  });
+
   // Settings state
   const [showAccountSettings, setShowAccountSettings] = useState(false);
 
@@ -250,13 +226,8 @@ const OfficeCanvas: React.FC = () => {
   // Tooltip state for canvas hover
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; sub: string } | null>(null);
 
-  // Meeting room state
+  // Meeting room state (component handles its own internal state)
   const [showMeetingRoom, setShowMeetingRoom] = useState(false);
-  const [activeMeeting, setActiveMeeting] = useState<Meeting | null>(null);
-  const [meetingTopic, setMeetingTopic] = useState('');
-  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Whiteboard state
   const [showWhiteboard, setShowWhiteboard] = useState(false);
@@ -314,7 +285,11 @@ const OfficeCanvas: React.FC = () => {
   }, []);
 
   // Load desks from backend on mount — restores agents across page refreshes
+  // Uses desksLoadedRef guard to prevent double-firing in React StrictMode
   useEffect(() => {
+    if (!onboardingDone || desksLoadedRef.current) return;
+    desksLoadedRef.current = true;
+
     const loadDesks = async () => {
       try {
         const backendDesks = await listDesks();
@@ -365,33 +340,26 @@ const OfficeCanvas: React.FC = () => {
         setDeskAssignments(newAssignments);
 
         // Position agents once dimensions are available
+        // Merge with existing agents (CEO), replacing any duplicates by id
         const { width, height } = dimensionsRef.current;
-        if (width > 0 && height > 0) {
-          const layout = calculateDeskLayout(newDesks);
-          const positioned = newAgents.map(agent => {
-            const zone = layout.find(z => z.id === agent.zone);
-            if (zone) {
-              return {
-                ...agent,
-                x: width * zone.x + agent.deskOffset.x,
-                y: height * zone.y + agent.deskOffset.y
-              };
-            }
-            return agent;
-          });
-          setAgents(prev => [...prev, ...positioned]);
-        } else {
-          // Dimensions not ready yet — agents will be positioned by resize handler
-          setAgents(prev => [...prev, ...newAgents]);
-        }
+        const agentsToAdd = (width > 0 && height > 0)
+          ? newAgents.map(agent => {
+              const layout = calculateDeskLayout(newDesks);
+              const zone = layout.find(z => z.id === agent.zone);
+              return zone
+                ? { ...agent, x: width * zone.x + agent.deskOffset.x, y: height * zone.y + agent.deskOffset.y }
+                : agent;
+            })
+          : newAgents;
+
+        const newIds = new Set(agentsToAdd.map(a => a.id));
+        setAgents(prev => [...prev.filter(a => !newIds.has(a.id)), ...agentsToAdd]);
       } catch (err) {
         console.error('Failed to load desks from backend:', err);
       }
     };
 
-    if (onboardingDone) {
-      loadDesks();
-    }
+    loadDesks();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingDone]);
 
@@ -421,9 +389,7 @@ const OfficeCanvas: React.FC = () => {
     });
   }, [calculateZones, onboardingDone, ceoName, ceoSprite]);
 
-  const addLogEntry = useCallback((message: string) => {
-    setTaskLog(prev => [`[${new Date().toLocaleTimeString()}] ${message}`, ...prev].slice(0, 20));
-  }, []);
+  // addLogEntry is now provided by useActivityLog hook
 
   const calculateTaskCost = useCallback((modelId: string, inputTokens: number = 1000, outputTokens: number = 500): number => {
     const pricing = MODEL_PRICING[modelId];
@@ -534,9 +500,7 @@ const OfficeCanvas: React.FC = () => {
     closeHireWizard();
   }, [desks, addLogEntry, closeHireWizard]);
 
-  const updateTodayCost = useCallback((additionalCost: number) => {
-    setTodayApiCost(prev => prev + additionalCost);
-  }, []);
+  // updateTodayCost is now provided by useCostTracker hook
 
   const getMonthlySubscriptionTotal = useCallback(() => {
     return subscriptions
@@ -587,6 +551,9 @@ const OfficeCanvas: React.FC = () => {
       }
     }
 
+    // Detect if this is a code-related task (for VS Code integration)
+    const codeTask = isCodeRelatedTask(capturedTitle, capturedDesc);
+
     // Create local task immediately for UI feedback
     const localTask: Task = {
       id: `task-${Date.now()}`,
@@ -595,7 +562,8 @@ const OfficeCanvas: React.FC = () => {
       assignee: capturedAgent,
       status: 'in-progress',
       createdAt: Date.now(),
-      modelUsed: MODEL_PRICING[modelId]?.name || modelId
+      modelUsed: MODEL_PRICING[modelId]?.name || modelId,
+      isCodeTask: codeTask,
     };
 
     setTasks(prev => [...prev, localTask]);
@@ -629,14 +597,15 @@ const OfficeCanvas: React.FC = () => {
         description: capturedDesc || undefined,
         deskId: backendDeskId,
         assignedModelId: modelId,
+        isCodeTask: codeTask,
       });
 
       const result = await runTaskApi(backendTask.id);
 
-      // Update local task with real cost and result
+      // Update local task with real cost, result, and backend ID
       setTasks(prev => prev.map(t =>
         t.id === localTask.id
-          ? { ...t, status: 'completed', cost: result.costUsd, modelUsed: MODEL_PRICING[result.model]?.name || result.model }
+          ? { ...t, status: 'completed', cost: result.costUsd, modelUsed: MODEL_PRICING[result.model]?.name || result.model, backendId: backendTask.id }
           : t
       ));
 
@@ -718,195 +687,8 @@ const OfficeCanvas: React.FC = () => {
     }
   }, [selectedAgent, taskTitle, taskDescription, agents, deskAssignments, addLogEntry, getModelForAgent, calculateZones, updateTodayCost]);
 
-  // Meeting room functions
-  const scrollToBottom = useCallback(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
+  // Meeting room logic extracted to MeetingRoom.tsx
 
-  const startMeeting = useCallback(() => {
-    if (!meetingTopic || selectedParticipants.length === 0) return;
-
-    const newMeeting: Meeting = {
-      id: `meeting-${Date.now()}`,
-      topic: meetingTopic,
-      participants: selectedParticipants,
-      messages: [],
-      startedAt: Date.now()
-    };
-
-    setActiveMeeting(newMeeting);
-    addLogEntry(`Meeting started: "${meetingTopic}" with ${selectedParticipants.length} participants`);
-
-    // Move selected agents to meeting room
-    setAgents(prev => prev.map(agent => {
-      if (selectedParticipants.includes(agent.id)) {
-        const zones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
-        const participantIndex = selectedParticipants.indexOf(agent.id);
-        const angle = (participantIndex / selectedParticipants.length) * Math.PI * 2;
-        const radius = 40;
-        return {
-          ...agent,
-          targetX: zones.meeting.x + Math.cos(angle) * radius,
-          targetY: zones.meeting.y + Math.sin(angle) * radius,
-          isWorking: true
-        };
-      }
-      return agent;
-    }));
-
-    // Add welcome message
-    setTimeout(() => {
-      setActiveMeeting(prev => {
-        if (!prev) return null;
-        const welcomeMessage: ChatMessage = {
-          id: `msg-${Date.now()}`,
-          senderId: 'system',
-          senderName: 'System',
-          senderAvatar: '',
-          content: `Meeting "${meetingTopic}" has started. Discuss away!`,
-          timestamp: Date.now(),
-          isUser: false
-        };
-        return { ...prev, messages: [...prev.messages, welcomeMessage] };
-      });
-    }, 500);
-  }, [meetingTopic, selectedParticipants, addLogEntry, calculateZones]);
-
-  const sendChatMessage = useCallback(async () => {
-    if (!chatInput.trim() || !activeMeeting) return;
-
-    const userContent = chatInput.trim();
-    const newMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      senderId: 'user',
-      senderName: 'You',
-      senderAvatar: '',
-      content: userContent,
-      timestamp: Date.now(),
-      isUser: true
-    };
-
-    setActiveMeeting(prev => {
-      if (!prev) return null;
-      return { ...prev, messages: [...prev.messages, newMessage] };
-    });
-    setChatInput('');
-    scrollToBottom();
-
-    // Send message to each AI participant via backend proxy
-    for (const participantId of activeMeeting.participants) {
-      const agent = agents.find(a => a.id === participantId);
-      if (!agent || agent.id === 'ceo') continue;
-
-      const localDeskId = participantId.replace('agent-', '');
-      let assignment = deskAssignments.find(a => a.deskId === localDeskId);
-      let backendDeskId = assignment?.backendDeskId;
-
-      // Auto-sync desk to backend if needed
-      if (!backendDeskId) {
-        const modelId = assignment?.modelId || getModelForAgent(participantId);
-        try {
-          const backendDesk = await createDesk({
-            name: assignment?.customName || agent.name || 'Desk',
-            agentName: assignment?.agentName || agent.name || 'Agent',
-            agentColor: agent.color || '#feca57',
-            avatarId: agent.avatar || 'avatar1',
-            deskType: 'mini',
-            models: [modelId],
-          });
-          backendDeskId = backendDesk.id;
-          setDeskAssignments(prev => prev.map(a =>
-            a.deskId === localDeskId ? { ...a, backendDeskId: backendDesk.id } : a
-          ));
-        } catch {
-          // Can't sync — skip this agent
-          continue;
-        }
-      }
-
-      // Build conversation history for this agent
-      const chatHistory = activeMeeting.messages
-        .filter(m => m.senderId !== 'system')
-        .map(m => ({
-          role: (m.isUser ? 'user' : 'assistant') as 'user' | 'assistant',
-          content: m.isUser ? m.content : `[${m.senderName}]: ${m.content}`
-        }));
-      chatHistory.push({ role: 'user' as const, content: userContent });
-
-      try {
-        const response = await sendChat(backendDeskId, chatHistory);
-
-        const agentMessage: ChatMessage = {
-          id: `msg-${Date.now()}-${participantId}`,
-          senderId: participantId,
-          senderName: agent.name,
-          senderAvatar: agent.avatar || '',
-          content: response.content,
-          timestamp: Date.now(),
-          isUser: false
-        };
-
-        setActiveMeeting(prev => {
-          if (!prev) return null;
-          return { ...prev, messages: [...prev.messages, agentMessage] };
-        });
-
-        updateTodayCost(response.costUsd);
-        scrollToBottom();
-      } catch (err) {
-        const raw = err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String((err as { message: string }).message) : 'Failed to get response';
-        let errMsg = raw;
-        if (raw.includes('No active') && raw.includes('credential')) {
-          errMsg = `No API key found for this provider. Add one via Hire Agent → Manage tab.`;
-        } else if (raw.includes('exceeded') || raw.includes('quota') || raw.includes('insufficient')) {
-          errMsg = `API key has no credits. Add billing at your provider's dashboard.`;
-        } else if (raw.includes('Kimi Code key') || raw.includes('sk-kimi-')) {
-          errMsg = `Kimi Code keys only work in coding agents. Use a Moonshot platform key.`;
-        } else if (raw.includes('Invalid API key') || raw.includes('Incorrect API key') || raw.includes('invalid_api_key')) {
-          errMsg = `Invalid API key. Check in Hire Agent → Manage.`;
-        }
-        const errorMessage: ChatMessage = {
-          id: `msg-${Date.now()}-${participantId}-err`,
-          senderId: participantId,
-          senderName: agent.name,
-          senderAvatar: agent.avatar || '',
-          content: `[${errMsg}]`,
-          timestamp: Date.now(),
-          isUser: false
-        };
-        setActiveMeeting(prev => {
-          if (!prev) return null;
-          return { ...prev, messages: [...prev.messages, errorMessage] };
-        });
-        scrollToBottom();
-      }
-    }
-  }, [chatInput, activeMeeting, agents, deskAssignments, getModelForAgent, scrollToBottom, updateTodayCost]);
-
-  const endMeeting = useCallback(() => {
-    if (!activeMeeting) return;
-
-    addLogEntry(`Meeting ended: "${activeMeeting.topic}"`);
-
-    // Return agents to their desks
-    setAgents(prev => prev.map(agent => {
-      if (activeMeeting.participants.includes(agent.id)) {
-        const zones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
-        return {
-          ...agent,
-          targetX: zones[agent.zone].x + agent.deskOffset.x,
-          targetY: zones[agent.zone].y + agent.deskOffset.y,
-          isWorking: false
-        };
-      }
-      return agent;
-    }));
-
-    setActiveMeeting(null);
-    setMeetingTopic('');
-    setSelectedParticipants([]);
-    setShowMeetingRoom(false);
-  }, [activeMeeting, addLogEntry, calculateZones]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1353,22 +1135,7 @@ const OfficeCanvas: React.FC = () => {
         }
       });
 
-      // Title (rendered on the wall)
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.6)';
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetY = 2;
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 30px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Agent Desk', width / 2, 50);
-      ctx.shadowBlur = 0;
-
-      // Subtitle
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      ctx.font = '12px sans-serif';
-      ctx.fillText('AI Agency Operations Center', width / 2, 70);
-      ctx.restore();
+      // (Brand moved to top nav bar)
     };
 
     const loop = (time: number) => {
@@ -1534,6 +1301,10 @@ const OfficeCanvas: React.FC = () => {
 
       {/* Top Navigation Bar */}
       <div className={`top-nav${!onboardingDone ? ' nav-disabled' : ''}`}>
+        <div className="top-nav-brand">
+          <img src="/assets/office-logo.png" alt="Agent Desk" className="top-nav-logo" />
+          <span className="top-nav-title">Agent Desk</span>
+        </div>
         <button disabled={!onboardingDone} onClick={() => setShowTaskForm(true)}>New Task</button>
         <button disabled={!onboardingDone} onClick={() => setShowMeetingRoom(true)}>Meeting Room</button>
         <button disabled={!onboardingDone} onClick={openHireWizard}>Hire Agent</button>
@@ -1550,86 +1321,103 @@ const OfficeCanvas: React.FC = () => {
       <div className="left-sidebar">
         {/* Live Task Feed */}
         <div className="ui-panel task-feed-panel">
-          <div className="task-feed-header">
+          <div className="task-feed-header" onClick={() => setShowFeedPanel(true)} style={{ cursor: 'pointer' }}>
             <h3>Live Feed</h3>
             <span className="task-feed-count">
               {tasks.filter(t => t.status === 'in-progress').length > 0 && (
                 <span className="pulse-dot" />
               )}
               {tasks.filter(t => t.status === 'in-progress').length} active
+              {tasks.length > 0 && (
+                <button className="feed-clear-btn" onClick={(e) => { e.stopPropagation(); clearTasks(); }}>Clear</button>
+              )}
             </span>
           </div>
 
-          {/* Active tasks with controls */}
-          {tasks.filter(t => t.status === 'in-progress').length > 0 && (
-            <div className="active-tasks-feed">
-              {tasks.filter(t => t.status === 'in-progress').map(task => {
-                const agent = agents.find(a => a.id === task.assignee);
-                return (
-                  <div key={task.id} className="feed-task active">
-                    <div className="feed-task-header">
-                      <span className="feed-task-status running">Running</span>
-                      <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+          <div className="feed-tasks-scroll">
+            {/* Active tasks with controls */}
+            {tasks.filter(t => t.status === 'in-progress').length > 0 && (
+              <div className="active-tasks-feed">
+                {tasks.filter(t => t.status === 'in-progress').map(task => {
+                  const agent = agents.find(a => a.id === task.assignee);
+                  return (
+                    <div key={task.id} className="feed-task active">
+                      <div className="feed-task-header">
+                        <span className="feed-task-status running">Running</span>
+                        <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+                      </div>
+                      <div className="feed-task-title">{task.name}</div>
+                      <div className="feed-task-model">{task.modelUsed}</div>
+                      <div className="feed-task-elapsed">
+                        {Math.round((Date.now() - task.createdAt) / 1000)}s elapsed
+                      </div>
                     </div>
-                    <div className="feed-task-title">{task.name}</div>
-                    <div className="feed-task-model">{task.modelUsed}</div>
-                    <div className="feed-task-elapsed">
-                      {Math.round((Date.now() - task.createdAt) / 1000)}s elapsed
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
 
-          {/* Failed tasks */}
-          {tasks.filter(t => t.status === 'failed').length > 0 && (
-            <div className="failed-tasks-feed">
-              {tasks.filter(t => t.status === 'failed').slice(-3).reverse().map(task => {
-                const agent = agents.find(a => a.id === task.assignee);
-                return (
-                  <div key={task.id} className="feed-task failed">
-                    <div className="feed-task-header">
-                      <span className="feed-task-status error">Failed</span>
-                      <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+            {/* Failed tasks */}
+            {tasks.filter(t => t.status === 'failed').length > 0 && (
+              <div className="failed-tasks-feed">
+                {tasks.filter(t => t.status === 'failed').slice(-3).reverse().map(task => {
+                  const agent = agents.find(a => a.id === task.assignee);
+                  return (
+                    <div key={task.id} className="feed-task failed">
+                      <div className="feed-task-header">
+                        <span className="feed-task-status error">Failed</span>
+                        <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+                        <button className="feed-task-delete" onClick={() => removeTask(task.id)}>
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                      <div className="feed-task-title">{task.name}</div>
+                      <div className="feed-task-error">{task.errorMessage || 'Unknown error'}</div>
                     </div>
-                    <div className="feed-task-title">{task.name}</div>
-                    <div className="feed-task-error">{task.errorMessage || 'Unknown error'}</div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
 
-          {/* Completed tasks */}
-          {tasks.filter(t => t.status === 'completed').length > 0 && (
-            <div className="completed-tasks-feed">
-              {tasks.filter(t => t.status === 'completed').slice(-5).reverse().map(task => {
-                const agent = agents.find(a => a.id === task.assignee);
-                const hasResult = !!taskResults[task.id];
-                return (
-                  <div key={task.id} className={`feed-task completed${hasResult ? ' has-result' : ''}`}
-                       onClick={() => hasResult && setViewingTaskResult(task.id)}>
-                    <div className="feed-task-header">
-                      <span className="feed-task-status done">Done</span>
-                      <span className="feed-task-cost">${task.cost?.toFixed(4) || '—'}</span>
+            {/* Completed tasks */}
+            {tasks.filter(t => t.status === 'completed').length > 0 && (
+              <div className="completed-tasks-feed">
+                {tasks.filter(t => t.status === 'completed').slice(-5).reverse().map(task => {
+                  const agent = agents.find(a => a.id === task.assignee);
+                  const hasResult = !!taskResults[task.id];
+                  return (
+                    <div key={task.id} className={`feed-task completed${hasResult ? ' has-result' : ''}`}
+                         onClick={() => hasResult && setViewingTaskResult(task.id)}>
+                      <div className="feed-task-header">
+                        <span className="feed-task-status done">Done</span>
+                        <span className="feed-task-cost">${task.cost?.toFixed(4) || '---'}</span>
+                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                      <div className="feed-task-title">{task.name}</div>
+                      <div className="feed-task-meta">
+                        <span>{agent?.name}</span>
+                        <span>{task.modelUsed}</span>
+                      </div>
+                      {hasResult && (
+                        <div className="feed-task-view">Click to view result</div>
+                      )}
                     </div>
-                    <div className="feed-task-title">{task.name}</div>
-                    <div className="feed-task-meta">
-                      <span>{agent?.name}</span>
-                      <span>{task.modelUsed}</span>
-                    </div>
-                    {hasResult && (
-                      <div className="feed-task-view">Click to view result</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
 
-          {tasks.length === 0 && (
-            <div className="feed-empty">No tasks yet — assign one to get started</div>
+            {tasks.length === 0 && (
+              <div className="feed-empty">No tasks yet — assign one to get started</div>
+            )}
+          </div>
+
+          {tasks.length > 0 && (
+            <div style={{ marginTop: '6px', fontSize: '10px', color: '#888', textAlign: 'center', cursor: 'pointer' }} onClick={() => setShowFeedPanel(true)}>
+              Click to expand
+            </div>
           )}
 
           {/* Activity log */}
@@ -1661,6 +1449,27 @@ const OfficeCanvas: React.FC = () => {
           </div>
         </div>
 
+      </div>
+
+      <div className="right-sidebar">
+        <div className="agents-panel">
+          <h3>Team</h3>
+          <div className="agents-grid">
+            {agents.filter(a => a.id !== 'ceo').map(agent => (
+              <div key={agent.id} className={`agent-mini-desk ${agent.isWorking ? 'working' : ''}`}>
+                <div className="mini-desk">
+                  <div className="mini-monitor"></div>
+                  <div className="mini-status" style={{ background: agent.isWorking ? '#1dd1a1' : '#666' }}></div>
+                </div>
+                <div className="agent-info">
+                  <span className="agent-initials">{agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</span>
+                  <span className="agent-name-short">{agent.name.split(' ')[0]}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="rules-panel" onClick={() => { setActiveTab('rules'); setShowWhiteboard(true); }}>
           <h3>Rules</h3>
           <div className="rules-count">{whiteboardNotes.rules?.length || 0} active</div>
@@ -1675,24 +1484,6 @@ const OfficeCanvas: React.FC = () => {
           <div style={{ marginTop: '8px', fontSize: '10px', color: '#888', textAlign: 'center' }}>
             Click to edit
           </div>
-        </div>
-      </div>
-
-      <div className="agents-panel">
-        <h3>Team</h3>
-        <div className="agents-grid">
-          {agents.filter(a => a.id !== 'ceo').map(agent => (
-            <div key={agent.id} className={`agent-mini-desk ${agent.isWorking ? 'working' : ''}`}>
-              <div className="mini-desk">
-                <div className="mini-monitor"></div>
-                <div className="mini-status" style={{ background: agent.isWorking ? '#1dd1a1' : '#666' }}></div>
-              </div>
-              <div className="agent-info">
-                <span className="agent-initials">{agent.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}</span>
-                <span className="agent-name-short">{agent.name.split(' ')[0]}</span>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 
@@ -1841,6 +1632,101 @@ const OfficeCanvas: React.FC = () => {
         </div>
       )}
 
+      {/* Expanded Live Feed */}
+      {showFeedPanel && (
+        <div className="feed-panel-overlay" onClick={() => setShowFeedPanel(false)}>
+          <div className="feed-panel-expanded" onClick={e => e.stopPropagation()}>
+            <div className="feed-panel-header">
+              <h2><Rss size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Live Feed</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {tasks.length > 0 && (
+                  <button className="feed-clear-btn" onClick={clearTasks}>Clear All</button>
+                )}
+                <button className="close-btn" onClick={() => setShowFeedPanel(false)}><X size={16} /></button>
+              </div>
+            </div>
+
+            {tasks.filter(t => t.status === 'in-progress').length > 0 && (
+              <div className="feed-section">
+                <h3>Active ({tasks.filter(t => t.status === 'in-progress').length})</h3>
+                {tasks.filter(t => t.status === 'in-progress').map(task => {
+                  const agent = agents.find(a => a.id === task.assignee);
+                  return (
+                    <div key={task.id} className="feed-task active">
+                      <div className="feed-task-header">
+                        <span className="feed-task-status running">Running</span>
+                        <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+                      </div>
+                      <div className="feed-task-title">{task.name}</div>
+                      <div className="feed-task-model">{task.modelUsed}</div>
+                      <div className="feed-task-elapsed">
+                        {Math.round((Date.now() - task.createdAt) / 1000)}s elapsed
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {tasks.filter(t => t.status === 'failed').length > 0 && (
+              <div className="feed-section">
+                <h3>Failed ({tasks.filter(t => t.status === 'failed').length})</h3>
+                {tasks.filter(t => t.status === 'failed').map(task => {
+                  const agent = agents.find(a => a.id === task.assignee);
+                  return (
+                    <div key={task.id} className="feed-task failed">
+                      <div className="feed-task-header">
+                        <span className="feed-task-status error">Failed</span>
+                        <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+                        <button className="feed-task-delete" onClick={() => removeTask(task.id)}>
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                      <div className="feed-task-title">{task.name}</div>
+                      <div className="feed-task-error">{task.errorMessage || 'Unknown error'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {tasks.filter(t => t.status === 'completed').length > 0 && (
+              <div className="feed-section">
+                <h3>Completed ({tasks.filter(t => t.status === 'completed').length})</h3>
+                {tasks.filter(t => t.status === 'completed').map(task => {
+                  const agent = agents.find(a => a.id === task.assignee);
+                  const hasResult = !!taskResults[task.id];
+                  return (
+                    <div key={task.id} className={`feed-task completed${hasResult ? ' has-result' : ''}`}
+                         onClick={() => { if (hasResult) { setShowFeedPanel(false); setViewingTaskResult(task.id); } }}>
+                      <div className="feed-task-header">
+                        <span className="feed-task-status done">Done</span>
+                        <span className="feed-task-cost">${task.cost?.toFixed(4) || '---'}</span>
+                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                      <div className="feed-task-title">{task.name}</div>
+                      <div className="feed-task-meta">
+                        <span>{agent?.name}</span>
+                        <span>{task.modelUsed}</span>
+                      </div>
+                      {hasResult && (
+                        <div className="feed-task-view">Click to view result</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {tasks.length === 0 && (
+              <div className="feed-empty" style={{ padding: '30px', textAlign: 'center' }}>No tasks yet</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Task Result Viewer */}
       {viewingTaskResult && taskResults[viewingTaskResult] && (
         <div className="task-result-overlay" onClick={() => setViewingTaskResult(null)}>
@@ -1867,166 +1753,72 @@ const OfficeCanvas: React.FC = () => {
               })()}
             </div>
             <div className="task-result-content">
-              <pre>{taskResults[viewingTaskResult]}</pre>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Meeting Room Setup Modal */}
-      {showMeetingRoom && !activeMeeting && (
-        <div className="meeting-overlay" onClick={() => setShowMeetingRoom(false)}>
-          <div className="meeting-setup" onClick={e => e.stopPropagation()}>
-            <div className="meeting-header">
-              <h2><Calendar size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8 }} />Start a Meeting</h2>
-              <button className="close-btn" onClick={() => setShowMeetingRoom(false)}><X size={16} /></button>
-            </div>
-
-            <div className="meeting-form">
-              <div className="form-group">
-                <label>Meeting Topic:</label>
-                <input
-                  type="text"
-                  value={meetingTopic}
-                  onChange={(e) => setMeetingTopic(e.target.value)}
-                  placeholder="e.g., Q1 Planning, Bug Triage, Architecture Review"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Select Participants:</label>
-                <div className="participant-list">
-                  {agents.filter(a => a.id !== 'ceo').map(agent => {
-                    const modelId = getModelForAgent(agent.id);
-                    const modelName = MODEL_PRICING[modelId]?.name || modelId;
-                    return (
-                    <label key={agent.id} className="participant-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selectedParticipants.includes(agent.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedParticipants([...selectedParticipants, agent.id]);
-                          } else {
-                            setSelectedParticipants(selectedParticipants.filter(id => id !== agent.id));
-                          }
-                        }}
-                      />
-                      <span className="participant-avatar">{agent.name.charAt(0).toUpperCase()}</span>
-                      <div className="participant-details">
-                        <span className="participant-name">{agent.name}</span>
-                        <span className="participant-model-label">{modelName}</span>
-                      </div>
-                    </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="form-buttons">
-                <button onClick={startMeeting} disabled={!meetingTopic || selectedParticipants.length === 0}>
-                  <Rocket size={14} style={{ marginRight: 6 }} />Start Meeting
-                </button>
-                <button onClick={() => setShowMeetingRoom(false)} className="secondary">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Active Meeting Chat */}
-      {showMeetingRoom && activeMeeting && (
-        <div className="meeting-overlay">
-          <div className="meeting-room">
-            <div className="meeting-room-header">
-              <div className="meeting-info">
-                <h2><Calendar size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8 }} />{activeMeeting.topic}</h2>
-                <span className="meeting-participants-count">
-                  {activeMeeting.participants.length} participants
-                </span>
-              </div>
-              <button className="end-meeting-btn" onClick={endMeeting}>
-                <CircleStop size={14} style={{ marginRight: 6 }} />End Meeting
-              </button>
-            </div>
-
-            <div className="meeting-content">
-              <div className="chat-container">
-                <div className="chat-messages">
-                  {activeMeeting.messages.map((msg) => {
-                    // Look up model for AI agents
-                    const agentModelId = !msg.isUser && msg.senderId !== 'system'
-                      ? getModelForAgent(msg.senderId)
-                      : null;
-                    const agentModelName = agentModelId ? (MODEL_PRICING[agentModelId]?.name || agentModelId) : null;
-                    return (
-                    <div key={msg.id} className={`chat-message ${msg.isUser ? 'me' : msg.senderId === 'system' ? 'system' : 'agent'}`}>
-                      {msg.senderId !== 'system' && (
-                        <div className="message-avatar">{msg.senderName.charAt(0).toUpperCase()}</div>
-                      )}
-
-                      <div className="message-content">
-                        {msg.senderId !== 'system' && (
-                          <div className="message-sender">
-                            {msg.senderName}
-                            {agentModelName && <span className="message-model-tag">{agentModelName}</span>}
-                          </div>
-                        )}
-                        <div className="message-text">{msg.content}</div>
-                        <div className="message-time">
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
+              {parseCodeBlocks(taskResults[viewingTaskResult]).map((seg, i) =>
+                seg.type === 'text' ? (
+                  <pre key={i}>{seg.content}</pre>
+                ) : (
+                  <div key={i} className="code-block">
+                    <div className="code-block-header">
+                      <span className="code-block-lang">{seg.language}</span>
+                      <div className="code-block-actions">
+                        <button
+                          className="code-block-copy"
+                          onClick={async (e) => {
+                            const btn = e.currentTarget;
+                            try {
+                              await navigator.clipboard.writeText(seg.content);
+                              btn.textContent = 'Copied';
+                              setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+                            } catch { /* clipboard unavailable */ }
+                          }}
+                        >
+                          Copy
+                        </button>
+                        <button
+                          className="code-block-open"
+                          onClick={async (e) => {
+                            const btn = e.currentTarget;
+                            try {
+                              const { filePath } = await openCode(seg.content, seg.language);
+                              window.location.href = `vscode://file${filePath}`;
+                              btn.textContent = 'Sent to VS Code';
+                              setTimeout(() => { btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.583 2.286l-4.574 4.596L7.722 2.67 2 5.39v13.202l5.704 2.737 5.307-4.212 4.572 4.597L24 18.58V5.402l-6.417-3.116zM7.7 15.094L4.709 12l2.99-3.094v6.188zm9.88 2.318l-4.496-3.624 4.496-3.624v7.248z"/></svg> VS Code'; }, 2000);
+                            } catch (err) {
+                              console.error('Failed to open in VS Code:', err);
+                            }
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.583 2.286l-4.574 4.596L7.722 2.67 2 5.39v13.202l5.704 2.737 5.307-4.212 4.572 4.597L24 18.58V5.402l-6.417-3.116zM7.7 15.094L4.709 12l2.99-3.094v6.188zm9.88 2.318l-4.496-3.624 4.496-3.624v7.248z"/>
+                          </svg>
+                          VS Code
+                        </button>
                       </div>
                     </div>
-                    );
-                  })}
-                  <div ref={chatEndRef} />
-                </div>
-
-                <div className="chat-input-area">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
-                    placeholder="Type your message..."
-                    className="chat-input"
-                  />
-                  <button onClick={sendChatMessage} className="send-btn" disabled={!chatInput.trim()}>
-                    <Send size={16} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="meeting-sidebar">
-                <h4>Participants</h4>
-                <div className="meeting-participants-list">
-                  <div className="participant-item me">
-                    <span className="participant-initial">Y</span>
-                    <span>You (CEO)</span>
+                    <pre><code>{seg.content}</code></pre>
                   </div>
-                  {activeMeeting.participants.filter(id => id !== 'ceo').map(participantId => {
-                    const agent = agents.find(a => a.id === participantId);
-                    const modelId = getModelForAgent(participantId);
-                    const modelName = MODEL_PRICING[modelId]?.name || modelId;
-                    return agent ? (
-                      <div key={participantId} className="participant-item">
-                        <span className="participant-initial">{agent.name.charAt(0).toUpperCase()}</span>
-                        <div className="participant-info">
-                          <span>{agent.name}</span>
-                          <span className="participant-model">{modelName}</span>
-                        </div>
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-              </div>
+                )
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Meeting Room — extracted to separate component */}
+      <MeetingRoom
+        show={showMeetingRoom}
+        onClose={() => setShowMeetingRoom(false)}
+        agents={agents}
+        deskAssignments={deskAssignments}
+        setAgents={setAgents}
+        setDeskAssignments={setDeskAssignments}
+        addLogEntry={addLogEntry}
+        updateTodayCost={updateTodayCost}
+        getModelForAgent={getModelForAgent}
+        calculateZones={calculateZones}
+        dimensionsRef={dimensionsRef}
+        modelPricing={MODEL_PRICING}
+      />
 
       {/* Whiteboard Modal */}
       {showWhiteboard && (

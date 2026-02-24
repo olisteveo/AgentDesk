@@ -1,10 +1,10 @@
 /**
- * Meeting room API — multi-agent discussions with file context.
+ * Meeting room API -- multi-agent discussions with file context.
  */
 
 import { apiRequest } from './client';
 
-// ── Types ────────────────────────────────────────────────────
+// -- Types ----------------------------------------------------------------
 
 export interface MeetingRow {
   id: string;
@@ -43,7 +43,7 @@ export interface MeetingAskResult {
   latencyMs: number;
 }
 
-// ── Endpoints ────────────────────────────────────────────────
+// -- Endpoints ------------------------------------------------------------
 
 /** List meetings (optionally filter by status). */
 export function listMeetings(status?: string): Promise<MeetingRow[]> {
@@ -51,8 +51,13 @@ export function listMeetings(status?: string): Promise<MeetingRow[]> {
   return apiRequest(`/api/meetings${qs}`);
 }
 
+/** Fetch a single meeting with full messages. */
+export function getMeeting(meetingId: string): Promise<MeetingRow> {
+  return apiRequest(`/api/meetings/${meetingId}`);
+}
+
 /** Start a new meeting. */
-export function startMeeting(data: {
+export function startMeetingApi(data: {
   topic: string;
   participants: string[];
   fileContext?: FileContext[];
@@ -90,19 +95,38 @@ export function askInMeeting(
   meetingId: string,
   deskId: string,
   content: string,
-  modelId?: string,
+  options?: {
+    modelId?: string;
+    round?: number;
+    otherResponses?: { agentName: string; content: string }[];
+  },
 ): Promise<MeetingAskResult> {
   return apiRequest(`/api/meetings/${meetingId}/ask`, {
     method: 'POST',
-    body: JSON.stringify({ deskId, content, modelId }),
+    body: JSON.stringify({
+      deskId,
+      content,
+      modelId: options?.modelId,
+      round: options?.round,
+      otherResponses: options?.otherResponses,
+    }),
   });
 }
 
 /** End an active meeting. */
-export function endMeeting(
+export function endMeetingApi(
   meetingId: string,
 ): Promise<{ id: string; topic: string; status: string; ended_at: string }> {
   return apiRequest(`/api/meetings/${meetingId}/end`, {
+    method: 'PATCH',
+  });
+}
+
+/** Reactivate an ended meeting. */
+export function reactivateMeeting(
+  meetingId: string,
+): Promise<MeetingRow> {
+  return apiRequest(`/api/meetings/${meetingId}/reactivate`, {
     method: 'PATCH',
   });
 }
