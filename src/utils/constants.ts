@@ -16,15 +16,14 @@ export const MODEL_PRICING: Record<string, { input: number; output: number; name
   'claude-sonnet-4':   { input: 0.00003,  output: 0.00015,  name: 'Claude Sonnet 4' },
   'claude-sonnet-4-5': { input: 0.00003,  output: 0.00015,  name: 'Claude Sonnet 4.5' },
   'claude-haiku-3-5':  { input: 0.0000008,output: 0.000004, name: 'Claude Haiku 3.5' },
-  // Moonshot
+  // Moonshot (platform keys from platform.moonshot.cn)
+  // Note: kimi-for-coding is excluded — it only works via coding agent clients
   'kimi-k2.5':          { input: 0.00002,  output: 0.00006,  name: 'Kimi K2.5' },
   'kimi-k1.5':          { input: 0.00001,  output: 0.00003,  name: 'Kimi K1.5' },
-  'kimi-for-coding':    { input: 0.00002,  output: 0.00006,  name: 'Kimi for Coding' },
   // Google
-  'gemini-2.5-pro':       { input: 0.00000125, output: 0.00001,  name: 'Gemini 2.5 Pro' },
-  'gemini-2.5-flash':     { input: 0.00000015, output: 0.0000006,name: 'Gemini 2.5 Flash' },
-  'gemini-2.0-flash':     { input: 0.0000001,  output: 0.0000004,name: 'Gemini 2.0 Flash' },
-  'gemini-2.0-flash-lite':{ input: 0.0000000375,output:0.00000015,name: 'Gemini 2.0 Flash Lite' },
+  'gemini-2.5-pro':       { input: 0.00000125, output: 0.00001,   name: 'Gemini 2.5 Pro' },
+  'gemini-2.5-flash':     { input: 0.00000015, output: 0.0000006, name: 'Gemini 2.5 Flash' },
+  'gemini-2.5-flash-lite':{ input: 0.0000000375,output:0.00000015,name: 'Gemini 2.5 Flash Lite' },
 };
 
 export const AVAILABLE_MODELS: ModelInfo[] = [
@@ -46,19 +45,17 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   // Moonshot
   { id: 'kimi-k2.5',        name: 'Kimi K2.5',        provider: 'moonshot', color: '#b4a5d4' },
   { id: 'kimi-k1.5',        name: 'Kimi K1.5',        provider: 'moonshot', color: '#c4b5e4' },
-  { id: 'kimi-for-coding',  name: 'Kimi for Coding',  provider: 'moonshot', color: '#a4b5d4' },
   // Google
   { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',        provider: 'google', color: '#a5d4d4' },
   { id: 'gemini-2.5-flash',      name: 'Gemini 2.5 Flash',      provider: 'google', color: '#b5e4e4' },
-  { id: 'gemini-2.0-flash',      name: 'Gemini 2.0 Flash',      provider: 'google', color: '#c5e4d4' },
-  { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', provider: 'google', color: '#d5e4c4' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', provider: 'google', color: '#d5e4c4' },
 ];
 
 export const PROVIDERS_LIST = [
   { id: 'openai',    name: 'OpenAI',    models: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o3-mini', 'o4-mini', 'codex-mini'] },
   { id: 'anthropic', name: 'Anthropic', models: ['claude-opus-4', 'claude-sonnet-4', 'claude-sonnet-4-5', 'claude-haiku-3-5'] },
-  { id: 'moonshot',  name: 'Moonshot',  models: ['kimi-k2.5', 'kimi-k1.5', 'kimi-for-coding'] },
-  { id: 'google',    name: 'Google',    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'] },
+  { id: 'moonshot',  name: 'Moonshot',  models: ['kimi-k2.5', 'kimi-k1.5'] },
+  { id: 'google',    name: 'Google',    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'] },
 ];
 
 export const DEFAULT_SUBSCRIPTIONS: Subscription[] = [

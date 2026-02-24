@@ -7,6 +7,7 @@ import { listDesks, createDesk, deleteDesk } from '../api/desks';
 import { createTask, runTask as runTaskApi } from '../api/tasks';
 import { sendChat } from '../api/chat';
 import type { Desk as BackendDesk } from '../api/desks';
+import { ClipboardList, DollarSign, BarChart3, Calendar, Rocket, X, Send, Crown, TrendingUp, Bot, CircleStop } from 'lucide-react';
 
 interface Agent {
   id: string;
@@ -49,10 +50,11 @@ interface Task {
   name: string;
   description: string;
   assignee: string;
-  status: 'pending' | 'in-progress' | 'completed';
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
   createdAt: number;
   cost?: number;
   modelUsed?: string;
+  errorMessage?: string;
 }
 
 interface ChatMessage {
@@ -558,12 +560,31 @@ const OfficeCanvas: React.FC = () => {
 
     // Resolve the backend desk ID for this agent
     const localDeskId = selectedAgent.replace('agent-', '');
-    const assignment = deskAssignments.find(a => a.deskId === localDeskId);
-    const backendDeskId = assignment?.backendDeskId;
+    let assignment = deskAssignments.find(a => a.deskId === localDeskId);
+    let backendDeskId = assignment?.backendDeskId;
 
+    // Auto-sync: if desk exists locally but not in backend, create it now
     if (!backendDeskId) {
-      addLogEntry(`Cannot run task — desk not synced to backend`);
-      return;
+      try {
+        const backendDesk = await createDesk({
+          name: assignment?.customName || agent?.name || `Desk`,
+          agentName: assignment?.agentName || agent?.name || 'Agent',
+          agentColor: agent?.color || '#feca57',
+          avatarId: agent?.avatar || 'avatar1',
+          deskType: 'mini',
+          models: [modelId],
+        });
+        backendDeskId = backendDesk.id;
+        // Update the assignment in state with the new backend ID
+        setDeskAssignments(prev => prev.map(a =>
+          a.deskId === localDeskId ? { ...a, backendDeskId: backendDesk.id } : a
+        ));
+        addLogEntry(`Synced desk "${assignment?.customName || localDeskId}" to backend`);
+      } catch (syncErr) {
+        const msg = syncErr instanceof Error ? syncErr.message : 'Unknown error';
+        addLogEntry(`Cannot sync desk to backend: ${msg}`);
+        return;
+      }
     }
 
     // Create local task immediately for UI feedback
@@ -666,9 +687,24 @@ const OfficeCanvas: React.FC = () => {
         }));
       }
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Unknown error';
+      const raw = err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String((err as { message: string }).message) : 'Unknown error';
+      // Make common backend errors user-friendly
+      let errMsg = raw;
+      if (raw.includes('No active') && raw.includes('credential')) {
+        errMsg = `No API key found for this model's provider. Open Hire Agent → Manage tab to add one.`;
+      } else if (raw.includes('exceeded') || raw.includes('quota') || raw.includes('insufficient')) {
+        errMsg = `API key has no credits/quota. Add billing at your provider's dashboard.`;
+      } else if (raw.includes('Kimi Code key') || raw.includes('sk-kimi-')) {
+        errMsg = `Kimi Code keys only work in coding agents. Add a Moonshot platform key instead.`;
+      } else if (raw.includes('Invalid API key') || raw.includes('Incorrect API key') || raw.includes('invalid_api_key')) {
+        errMsg = `Invalid API key. Check your key in Hire Agent → Manage tab.`;
+      } else if (raw.includes('AI provider call failed')) {
+        // Extract the useful part after "AI provider call failed:"
+        const detailMatch = raw.match(/details?:\s*(.+)/i) || raw.match(/failed:\s*(.+)/i);
+        errMsg = detailMatch ? detailMatch[1] : raw;
+      }
       setTasks(prev => prev.map(t =>
-        t.id === localTask.id ? { ...t, status: 'completed' } : t
+        t.id === localTask.id ? { ...t, status: 'failed' as const, errorMessage: errMsg } : t
       ));
       addLogEntry(`Task "${capturedTitle}" failed: ${errMsg}`);
 
@@ -699,7 +735,7 @@ const OfficeCanvas: React.FC = () => {
     };
 
     setActiveMeeting(newMeeting);
-    addLogEntry(`📅 Meeting started: "${meetingTopic}" with ${selectedParticipants.length} participants`);
+    addLogEntry(`Meeting started: "${meetingTopic}" with ${selectedParticipants.length} participants`);
 
     // Move selected agents to meeting room
     setAgents(prev => prev.map(agent => {
@@ -726,7 +762,7 @@ const OfficeCanvas: React.FC = () => {
           id: `msg-${Date.now()}`,
           senderId: 'system',
           senderName: 'System',
-          senderAvatar: '🤖',
+          senderAvatar: '',
           content: `Meeting "${meetingTopic}" has started. Discuss away!`,
           timestamp: Date.now(),
           isUser: false
@@ -744,7 +780,7 @@ const OfficeCanvas: React.FC = () => {
       id: `msg-${Date.now()}`,
       senderId: 'user',
       senderName: 'You',
-      senderAvatar: '👔',
+      senderAvatar: '',
       content: userContent,
       timestamp: Date.now(),
       isUser: true
@@ -763,10 +799,30 @@ const OfficeCanvas: React.FC = () => {
       if (!agent || agent.id === 'ceo') continue;
 
       const localDeskId = participantId.replace('agent-', '');
-      const assignment = deskAssignments.find(a => a.deskId === localDeskId);
-      const backendDeskId = assignment?.backendDeskId;
+      let assignment = deskAssignments.find(a => a.deskId === localDeskId);
+      let backendDeskId = assignment?.backendDeskId;
 
-      if (!backendDeskId) continue; // Skip agents without backend desks
+      // Auto-sync desk to backend if needed
+      if (!backendDeskId) {
+        const modelId = assignment?.modelId || getModelForAgent(participantId);
+        try {
+          const backendDesk = await createDesk({
+            name: assignment?.customName || agent.name || 'Desk',
+            agentName: assignment?.agentName || agent.name || 'Agent',
+            agentColor: agent.color || '#feca57',
+            avatarId: agent.avatar || 'avatar1',
+            deskType: 'mini',
+            models: [modelId],
+          });
+          backendDeskId = backendDesk.id;
+          setDeskAssignments(prev => prev.map(a =>
+            a.deskId === localDeskId ? { ...a, backendDeskId: backendDesk.id } : a
+          ));
+        } catch {
+          // Can't sync — skip this agent
+          continue;
+        }
+      }
 
       // Build conversation history for this agent
       const chatHistory = activeMeeting.messages
@@ -784,7 +840,7 @@ const OfficeCanvas: React.FC = () => {
           id: `msg-${Date.now()}-${participantId}`,
           senderId: participantId,
           senderName: agent.name,
-          senderAvatar: agent.avatar || '🤖',
+          senderAvatar: agent.avatar || '',
           content: response.content,
           timestamp: Date.now(),
           isUser: false
@@ -798,13 +854,23 @@ const OfficeCanvas: React.FC = () => {
         updateTodayCost(response.costUsd);
         scrollToBottom();
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : 'Failed to get response';
+        const raw = err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String((err as { message: string }).message) : 'Failed to get response';
+        let errMsg = raw;
+        if (raw.includes('No active') && raw.includes('credential')) {
+          errMsg = `No API key found for this provider. Add one via Hire Agent → Manage tab.`;
+        } else if (raw.includes('exceeded') || raw.includes('quota') || raw.includes('insufficient')) {
+          errMsg = `API key has no credits. Add billing at your provider's dashboard.`;
+        } else if (raw.includes('Kimi Code key') || raw.includes('sk-kimi-')) {
+          errMsg = `Kimi Code keys only work in coding agents. Use a Moonshot platform key.`;
+        } else if (raw.includes('Invalid API key') || raw.includes('Incorrect API key') || raw.includes('invalid_api_key')) {
+          errMsg = `Invalid API key. Check in Hire Agent → Manage.`;
+        }
         const errorMessage: ChatMessage = {
           id: `msg-${Date.now()}-${participantId}-err`,
           senderId: participantId,
           senderName: agent.name,
-          senderAvatar: agent.avatar || '🤖',
-          content: `[Error: ${errMsg}]`,
+          senderAvatar: agent.avatar || '',
+          content: `[${errMsg}]`,
           timestamp: Date.now(),
           isUser: false
         };
@@ -815,12 +881,12 @@ const OfficeCanvas: React.FC = () => {
         scrollToBottom();
       }
     }
-  }, [chatInput, activeMeeting, agents, deskAssignments, scrollToBottom, updateTodayCost]);
+  }, [chatInput, activeMeeting, agents, deskAssignments, getModelForAgent, scrollToBottom, updateTodayCost]);
 
   const endMeeting = useCallback(() => {
     if (!activeMeeting) return;
 
-    addLogEntry(`📅 Meeting ended: "${activeMeeting.topic}"`);
+    addLogEntry(`Meeting ended: "${activeMeeting.topic}"`);
 
     // Return agents to their desks
     setAgents(prev => prev.map(agent => {
@@ -1516,7 +1582,26 @@ const OfficeCanvas: React.FC = () => {
             </div>
           )}
 
-          {/* Completed/failed tasks */}
+          {/* Failed tasks */}
+          {tasks.filter(t => t.status === 'failed').length > 0 && (
+            <div className="failed-tasks-feed">
+              {tasks.filter(t => t.status === 'failed').slice(-3).reverse().map(task => {
+                const agent = agents.find(a => a.id === task.assignee);
+                return (
+                  <div key={task.id} className="feed-task failed">
+                    <div className="feed-task-header">
+                      <span className="feed-task-status error">Failed</span>
+                      <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+                    </div>
+                    <div className="feed-task-title">{task.name}</div>
+                    <div className="feed-task-error">{task.errorMessage || 'Unknown error'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Completed tasks */}
           {tasks.filter(t => t.status === 'completed').length > 0 && (
             <div className="completed-tasks-feed">
               {tasks.filter(t => t.status === 'completed').slice(-5).reverse().map(task => {
@@ -1614,7 +1699,7 @@ const OfficeCanvas: React.FC = () => {
       {showTaskForm && (
         <div className="task-form-overlay">
           <div className="task-form">
-            <h2>📋 Create New Task</h2>
+            <h2><ClipboardList size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8 }} />Create New Task</h2>
 
             <div className="form-group">
               <label>Select Agent:</label>
@@ -1625,7 +1710,7 @@ const OfficeCanvas: React.FC = () => {
                   const pricing = MODEL_PRICING[modelId];
                   return (
                     <option key={agent.id} value={agent.id}>
-                      {agent.avatar} {agent.name} - {pricing?.name} (~${(pricing ? (pricing.input * 1000 + pricing.output * 500) : 0).toFixed(4)}/task)
+                      {agent.name} - {pricing?.name} (~${(pricing ? (pricing.input * 1000 + pricing.output * 500) : 0).toFixed(4)}/task)
                     </option>
                   );
                 })}
@@ -1634,7 +1719,7 @@ const OfficeCanvas: React.FC = () => {
 
             {selectedAgent && (
               <div className="cost-estimate">
-                <span>💰 Estimated cost: </span>
+                <span><DollarSign size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> Estimated cost: </span>
                 <strong>${calculateTaskCost(getModelForAgent(selectedAgent)).toFixed(4)}</strong>
                 <span className="cost-model"> ({MODEL_PRICING[getModelForAgent(selectedAgent)]?.name})</span>
               </div>
@@ -1662,10 +1747,10 @@ const OfficeCanvas: React.FC = () => {
 
             <div className="form-buttons">
               <button onClick={assignTask} disabled={!selectedAgent || !taskTitle}>
-                ✅ Assign Task
+                Assign Task
               </button>
               <button onClick={() => setShowTaskForm(false)} className="secondary">
-                ❌ Cancel
+                Cancel
               </button>
             </div>
           </div>
@@ -1676,12 +1761,12 @@ const OfficeCanvas: React.FC = () => {
         <div className="cost-panel-overlay" onClick={() => setShowCostPanel(false)}>
           <div className="cost-panel" onClick={e => e.stopPropagation()}>
             <div className="cost-panel-header">
-              <h2>💰 Cost Dashboard</h2>
-              <button className="close-btn" onClick={() => setShowCostPanel(false)}>✕</button>
+              <h2><DollarSign size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Cost Dashboard</h2>
+              <button className="close-btn" onClick={() => setShowCostPanel(false)}><X size={16} /></button>
             </div>
 
             <div className="cost-section">
-              <h3>📊 Today's Spending</h3>
+              <h3><BarChart3 size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Today's Spending</h3>
               <div className="cost-cards">
                 <div className="cost-card api">
                   <div className="cost-label">API Calls</div>
@@ -1699,7 +1784,7 @@ const OfficeCanvas: React.FC = () => {
             </div>
 
             <div className="cost-section">
-              <h3>📋 Active Subscriptions</h3>
+              <h3><ClipboardList size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Active Subscriptions</h3>
               <div className="subscriptions-list">
                 {subscriptions.filter(s => s.active).map(sub => (
                   <div key={sub.id} className="subscription-item">
@@ -1725,7 +1810,7 @@ const OfficeCanvas: React.FC = () => {
             </div>
 
             <div className="cost-section">
-              <h3>🤖 Model Pricing (per 1K tokens)</h3>
+              <h3><Bot size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Model Pricing (per 1K tokens)</h3>
               <div className="pricing-table">
                 {Object.entries(MODEL_PRICING).map(([id, pricing]) => (
                   <div key={id} className="pricing-row">
@@ -1738,7 +1823,7 @@ const OfficeCanvas: React.FC = () => {
             </div>
 
             <div className="cost-section">
-              <h3>📈 Recent Tasks with Costs</h3>
+              <h3><TrendingUp size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Recent Tasks with Costs</h3>
               <div className="task-costs">
                 {tasks.filter(t => t.cost).slice(-10).reverse().map(task => (
                   <div key={task.id} className="task-cost-item">
@@ -1762,7 +1847,7 @@ const OfficeCanvas: React.FC = () => {
           <div className="task-result-modal" onClick={e => e.stopPropagation()}>
             <div className="task-result-header">
               <h2>Task Result</h2>
-              <button className="close-btn" onClick={() => setViewingTaskResult(null)}>✕</button>
+              <button className="close-btn" onClick={() => setViewingTaskResult(null)}><X size={16} /></button>
             </div>
             <div className="task-result-info">
               {(() => {
@@ -1793,8 +1878,8 @@ const OfficeCanvas: React.FC = () => {
         <div className="meeting-overlay" onClick={() => setShowMeetingRoom(false)}>
           <div className="meeting-setup" onClick={e => e.stopPropagation()}>
             <div className="meeting-header">
-              <h2>📅 Start a Meeting</h2>
-              <button className="close-btn" onClick={() => setShowMeetingRoom(false)}>✕</button>
+              <h2><Calendar size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8 }} />Start a Meeting</h2>
+              <button className="close-btn" onClick={() => setShowMeetingRoom(false)}><X size={16} /></button>
             </div>
 
             <div className="meeting-form">
@@ -1811,7 +1896,10 @@ const OfficeCanvas: React.FC = () => {
               <div className="form-group">
                 <label>Select Participants:</label>
                 <div className="participant-list">
-                  {agents.filter(a => a.id !== 'ceo').map(agent => (
+                  {agents.filter(a => a.id !== 'ceo').map(agent => {
+                    const modelId = getModelForAgent(agent.id);
+                    const modelName = MODEL_PRICING[modelId]?.name || modelId;
+                    return (
                     <label key={agent.id} className="participant-checkbox">
                       <input
                         type="checkbox"
@@ -1824,20 +1912,23 @@ const OfficeCanvas: React.FC = () => {
                           }
                         }}
                       />
-                      <span className="participant-avatar">{agent.avatar}</span>
-                      <span className="participant-name">{agent.name}</span>
-                      <span className="participant-role">{agent.role}</span>
+                      <span className="participant-avatar">{agent.name.charAt(0).toUpperCase()}</span>
+                      <div className="participant-details">
+                        <span className="participant-name">{agent.name}</span>
+                        <span className="participant-model-label">{modelName}</span>
+                      </div>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               <div className="form-buttons">
                 <button onClick={startMeeting} disabled={!meetingTopic || selectedParticipants.length === 0}>
-                  🚀 Start Meeting
+                  <Rocket size={14} style={{ marginRight: 6 }} />Start Meeting
                 </button>
                 <button onClick={() => setShowMeetingRoom(false)} className="secondary">
-                  ❌ Cancel
+                  Cancel
                 </button>
               </div>
             </div>
@@ -1851,28 +1942,37 @@ const OfficeCanvas: React.FC = () => {
           <div className="meeting-room">
             <div className="meeting-room-header">
               <div className="meeting-info">
-                <h2>📅 {activeMeeting.topic}</h2>
+                <h2><Calendar size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8 }} />{activeMeeting.topic}</h2>
                 <span className="meeting-participants-count">
                   {activeMeeting.participants.length} participants
                 </span>
               </div>
               <button className="end-meeting-btn" onClick={endMeeting}>
-                🔴 End Meeting
+                <CircleStop size={14} style={{ marginRight: 6 }} />End Meeting
               </button>
             </div>
 
             <div className="meeting-content">
               <div className="chat-container">
                 <div className="chat-messages">
-                  {activeMeeting.messages.map((msg) => (
+                  {activeMeeting.messages.map((msg) => {
+                    // Look up model for AI agents
+                    const agentModelId = !msg.isUser && msg.senderId !== 'system'
+                      ? getModelForAgent(msg.senderId)
+                      : null;
+                    const agentModelName = agentModelId ? (MODEL_PRICING[agentModelId]?.name || agentModelId) : null;
+                    return (
                     <div key={msg.id} className={`chat-message ${msg.isUser ? 'me' : msg.senderId === 'system' ? 'system' : 'agent'}`}>
                       {msg.senderId !== 'system' && (
-                        <div className="message-avatar">{msg.senderAvatar}</div>
+                        <div className="message-avatar">{msg.senderName.charAt(0).toUpperCase()}</div>
                       )}
 
                       <div className="message-content">
                         {msg.senderId !== 'system' && (
-                          <div className="message-sender">{msg.senderName}</div>
+                          <div className="message-sender">
+                            {msg.senderName}
+                            {agentModelName && <span className="message-model-tag">{agentModelName}</span>}
+                          </div>
                         )}
                         <div className="message-text">{msg.content}</div>
                         <div className="message-time">
@@ -1880,7 +1980,8 @@ const OfficeCanvas: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   <div ref={chatEndRef} />
                 </div>
 
@@ -1894,7 +1995,7 @@ const OfficeCanvas: React.FC = () => {
                     className="chat-input"
                   />
                   <button onClick={sendChatMessage} className="send-btn" disabled={!chatInput.trim()}>
-                    ➤
+                    <Send size={16} />
                   </button>
                 </div>
               </div>
@@ -1903,15 +2004,20 @@ const OfficeCanvas: React.FC = () => {
                 <h4>Participants</h4>
                 <div className="meeting-participants-list">
                   <div className="participant-item me">
-                    <span>👑</span>
+                    <span className="participant-initial">Y</span>
                     <span>You (CEO)</span>
                   </div>
                   {activeMeeting.participants.filter(id => id !== 'ceo').map(participantId => {
                     const agent = agents.find(a => a.id === participantId);
+                    const modelId = getModelForAgent(participantId);
+                    const modelName = MODEL_PRICING[modelId]?.name || modelId;
                     return agent ? (
                       <div key={participantId} className="participant-item">
-                        <span>{agent.avatar}</span>
-                        <span>{agent.name}</span>
+                        <span className="participant-initial">{agent.name.charAt(0).toUpperCase()}</span>
+                        <div className="participant-info">
+                          <span>{agent.name}</span>
+                          <span className="participant-model">{modelName}</span>
+                        </div>
                       </div>
                     ) : null;
                   })}

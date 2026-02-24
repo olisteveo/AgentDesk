@@ -439,12 +439,12 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(5, 5, 15, 0.88);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 100;
-  backdrop-filter: blur(5px);
+  z-index: 10000;
+  backdrop-filter: blur(16px);
 }
 
 .task-form {
@@ -574,12 +574,12 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(5, 5, 15, 0.88);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 200;
-  backdrop-filter: blur(8px);
+  z-index: 10000;
+  backdrop-filter: blur(16px);
 }
 
 .cost-panel {
@@ -1111,12 +1111,12 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(5, 5, 15, 0.92);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 300;
-  backdrop-filter: blur(10px);
+  z-index: 10000;
+  backdrop-filter: blur(20px);
 }
 
 .meeting-setup {
@@ -1182,13 +1182,54 @@
 }
 
 .participant-avatar {
-  font-size: 20px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.2));
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a5b4fc;
+}
+
+.participant-initial {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.15));
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b9cf7;
 }
 
 .participant-name {
   color: #fff;
   font-weight: 500;
   flex: 1;
+}
+
+.participant-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.participant-details .participant-name {
+  flex: unset;
+}
+
+.participant-model-label {
+  font-size: 10px;
+  color: #8b9cf7;
+  opacity: 0.8;
 }
 
 .participant-role {
@@ -1203,7 +1244,8 @@
   border: 1px solid #444;
   width: 95%;
   max-width: 1000px;
-  height: 90vh;
+  height: 85vh;
+  max-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.9);
@@ -1292,14 +1334,18 @@
 }
 
 .message-avatar {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.15));
+  border: 1px solid rgba(102, 126, 234, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #8b9cf7;
+  flex-shrink: 0;
   flex-shrink: 0;
 }
 
@@ -1320,6 +1366,20 @@
   color: #667eea;
   font-weight: 600;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.message-model-tag {
+  font-size: 9px;
+  font-weight: 500;
+  color: #8b9cf7;
+  background: rgba(102, 126, 234, 0.12);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  letter-spacing: 0.3px;
 }
 
 .chat-message.me .message-sender {
@@ -1425,6 +1485,18 @@
   border-radius: 8px;
   font-size: 13px;
   color: #fff;
+}
+
+.participant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.participant-model {
+  font-size: 10px;
+  color: #8b9cf7;
+  opacity: 0.7;
 }
 
 .participant-item.me {
@@ -1770,6 +1842,24 @@
   background: rgba(29, 209, 161, 0.05);
 }
 
+.feed-task.failed {
+  border-color: rgba(255, 107, 107, 0.3);
+  background: rgba(255, 107, 107, 0.05);
+}
+
+.feed-task-error {
+  font-size: 10px;
+  color: #ff6b6b;
+  margin-top: 4px;
+  line-height: 1.3;
+  opacity: 0.9;
+}
+
+.feed-task-status.error {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+}
+
 .feed-task.completed.has-result {
   cursor: pointer;
 }
@@ -1878,12 +1968,12 @@
 .task-result-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(5, 5, 15, 0.88);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
-  backdrop-filter: blur(4px);
+  z-index: 10000;
+  backdrop-filter: blur(16px);
 }
 
 .task-result-modal {

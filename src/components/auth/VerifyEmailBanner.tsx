@@ -47,9 +47,9 @@ export function VerifyEmailBanner() {
         backdropFilter: 'blur(10px)',
       }}
     >
-      <span>📧 Please verify your email address to unlock all features.</span>
+      <span>Please verify your email address to unlock all features.</span>
       {sent ? (
-        <span style={{ color: '#4ade80', fontSize: 13 }}>✓ Email sent!</span>
+        <span style={{ color: '#4ade80', fontSize: 13 }}>Email sent!</span>
       ) : (
         <button
           onClick={handleResend}

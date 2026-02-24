@@ -294,7 +294,7 @@ const PixelOffice: React.FC<PixelOfficeProps> = ({ isPro }) => {
       ctx.fillStyle = '#feca57';
       ctx.font = `${Math.round(H * 0.1)}px sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText('🔒', lockX, lockY + boxH * 0.45);
+      ctx.fillText('LOCKED', lockX, lockY + boxH * 0.45);
 
       ctx.fillStyle = '#feca57';
       ctx.font = `bold ${Math.round(H * 0.036)}px 'Courier New', monospace`;

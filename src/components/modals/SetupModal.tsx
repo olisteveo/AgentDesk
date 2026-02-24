@@ -83,7 +83,7 @@ export const SetupModal: React.FC<SetupModalProps> = ({
       <div className="task-form" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2>Setup</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '10px' }}>

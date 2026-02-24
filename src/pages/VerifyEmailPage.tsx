@@ -60,7 +60,7 @@ export function VerifyEmailPage() {
 
         {status === 'success' && (
           <>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+            <div style={{ fontSize: 32, marginBottom: 16, color: '#4ade80', fontWeight: 600 }}>Verified</div>
             <p style={{ color: '#4ade80', marginBottom: 24 }}>{message}</p>
             <Link
               to={isAuthenticated ? '/office' : '/login'}
@@ -74,7 +74,7 @@ export function VerifyEmailPage() {
 
         {status === 'error' && (
           <>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
+            <div style={{ fontSize: 32, marginBottom: 16, color: '#ff6b6b', fontWeight: 600 }}>Error</div>
             <p style={{ color: '#ff6b6b', marginBottom: 24 }}>{message}</p>
             <Link
               to={isAuthenticated ? '/office' : '/login'}

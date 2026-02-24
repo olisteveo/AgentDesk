@@ -36,7 +36,7 @@ export function VerifyEmailWaitPage() {
   return (
     <div className="auth-page">
       <div className="auth-card" style={{ textAlign: 'center', maxWidth: 440 }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>📧</div>
+        <div style={{ fontSize: 42, marginBottom: 16, color: '#667eea', fontWeight: 300 }}>Email Verification</div>
         <h1 className="auth-title">Check Your Email</h1>
         <p style={{ color: '#aaa', lineHeight: 1.6, marginBottom: 24 }}>
           We sent a verification link to{' '}
@@ -47,7 +47,7 @@ export function VerifyEmailWaitPage() {
 
         {sent && (
           <p style={{ color: '#4ade80', fontSize: 14, marginBottom: 16 }}>
-            ✓ Verification email resent!
+            Verification email resent!
           </p>
         )}
         {error && (

@@ -118,7 +118,12 @@ export async function apiRequest<T>(
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw createApiError(res.status, body.error || `Request failed (${res.status})`);
+    // Include details if the backend sent them (e.g. AI provider errors)
+    let message = body.error || `Request failed (${res.status})`;
+    if (body.details) {
+      message += `: ${body.details}`;
+    }
+    throw createApiError(res.status, message);
   }
   return res.json() as Promise<T>;
 }

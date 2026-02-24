@@ -91,7 +91,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ margin: 0 }}>Settings</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
 
         {/* Tabs */}
@@ -230,7 +230,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
               borderRadius: 10, padding: '12px 16px', marginBottom: 16,
               display: 'flex', alignItems: 'center', gap: 10,
             }}>
-              <span style={{ fontSize: 16 }}>🔑</span>
+              <span style={{ fontSize: 14, color: '#8b9cf7', fontWeight: 600 }}>BYOK</span>
               <p style={{ color: '#8b9cf7', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
                 All plans are <strong>BYOK</strong> (Bring Your Own Keys). You connect your own AI provider API keys — we never charge for AI usage, only for workspace features.
               </p>

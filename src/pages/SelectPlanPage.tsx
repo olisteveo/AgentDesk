@@ -110,7 +110,7 @@ export function SelectPlanPage() {
             Start free, upgrade when you need more power. Change any time from settings.
           </p>
           <p className="select-plan-byok">
-            🔑 All plans are <strong>BYOK</strong> — Bring Your Own Keys. You connect your own AI provider API keys. We never charge for AI usage, only for workspace features.
+            All plans are <strong>BYOK</strong> — Bring Your Own Keys. You connect your own AI provider API keys. We never charge for AI usage, only for workspace features.
           </p>
         </div>
 
