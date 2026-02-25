@@ -4,9 +4,10 @@ import type { MeetingRow } from '../api/meetings';
 import { sendChat } from '../api/chat';
 import { createDesk } from '../api/desks';
 import type { DeskAssignment } from '../types';
-import { Calendar, Rocket, X, Send, CircleStop, History, RotateCcw, MessageSquare, Trash2 } from 'lucide-react';
+import { Calendar, Rocket, X, Send, CircleStop, History, RotateCcw, MessageSquare, Trash2, Download } from 'lucide-react';
 import { parseCodeBlocks } from '../utils/parseCodeBlocks';
 import { openCode } from '../api/tasks';
+import { downloadCodeBlock } from '../utils/download';
 import './MeetingRoom.css';
 
 // ── Types ────────────────────────────────────────────────────
@@ -800,6 +801,9 @@ const MeetingRoom: React.FC<MeetingRoomProps> = ({
                                         setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
                                       }
                                     }}>Copy</button>
+                                    <button className="code-block-download" onClick={() => downloadCodeBlock(seg.content, seg.language)} title="Download file">
+                                      <Download size={10} />
+                                    </button>
                                     <button className="code-block-open" onClick={async (e) => {
                                       const btn = e.currentTarget;
                                       try {
@@ -918,6 +922,9 @@ const MeetingRoom: React.FC<MeetingRoomProps> = ({
                                               setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
                                             }
                                           }}>Copy</button>
+                                          <button className="code-block-download" onClick={() => downloadCodeBlock(seg.content, seg.language)} title="Download file">
+                                            <Download size={10} />
+                                          </button>
                                           <button className="code-block-open" onClick={async (e) => {
                                             const btn = e.currentTarget;
                                             try {

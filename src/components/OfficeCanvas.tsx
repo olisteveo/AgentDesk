@@ -23,7 +23,11 @@ import {
 } from '../utils/sprites';
 import MeetingRoom from './MeetingRoom';
 import CostDashboard from './CostDashboard';
-import { ClipboardList, DollarSign, X, Trash2, Rss } from 'lucide-react';
+import { ClipboardList, DollarSign, X, Trash2, Rss, Download } from 'lucide-react';
+import { downloadCodeBlock, downloadAsMarkdown } from '../utils/download';
+import { friendlyError } from '../utils/friendlyErrors';
+import UpgradePrompt from './modals/UpgradePrompt';
+import type { PlanTier } from '../utils/tierConfig';
 
 // Meeting types moved to MeetingRoom.tsx
 
@@ -100,6 +104,7 @@ const OfficeCanvas: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [viewingTaskResult, setViewingTaskResult] = useState<string | null>(null);
+  const [viewingFailedTask, setViewingFailedTask] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState('');
@@ -133,6 +138,7 @@ const OfficeCanvas: React.FC = () => {
 
   // Settings state
   const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'account' | 'billing'>('account');
 
   // Hire Agent wizard state
   const [showHireWizard, setShowHireWizard] = useState(false);
@@ -155,6 +161,14 @@ const OfficeCanvas: React.FC = () => {
     rules: []
   });
   const [newNote, setNewNote] = useState('');
+
+  // Upgrade prompt state (shown when user hits a tier limit)
+  const [upgradePrompt, setUpgradePrompt] = useState<{
+    limitType: string;
+    plan: PlanTier;
+    current: number;
+    max: number;
+  } | null>(null);
 
   // Load sprite images once on mount
   useEffect(() => {
@@ -359,10 +373,22 @@ const OfficeCanvas: React.FC = () => {
         models: [data.model],
       });
       backendDeskId = backendDesk.id;
-    } catch (err) {
+    } catch (err: unknown) {
+      // Check for tier limit 403 — show upgrade prompt instead of generic error
+      const obj = err && typeof err === 'object' ? err as Record<string, unknown> : null;
+      if (obj && obj.status === 403 && typeof obj.message === 'string' && obj.message.includes('limit')) {
+        const body = typeof obj.body === 'object' && obj.body ? obj.body as Record<string, unknown> : obj;
+        setUpgradePrompt({
+          limitType: (body.limitType as string) || 'desks',
+          plan: (body.plan as PlanTier) || 'free',
+          current: (body.current as number) || 0,
+          max: (body.max as number) || 0,
+        });
+        return;
+      }
       console.error('Failed to save desk to backend:', err);
       addLogEntry(`Failed to create desk — check your connection`);
-      return; // Don't add locally if backend fails
+      return;
     }
 
     // Create Zone
@@ -562,23 +588,42 @@ const OfficeCanvas: React.FC = () => {
           return a;
         }));
       }
-    } catch (err) {
-      const raw = err instanceof Error ? err.message : typeof err === 'object' && err && 'message' in err ? String((err as { message: string }).message) : 'Unknown error';
-      // Make common backend errors user-friendly
-      let errMsg = raw;
-      if (raw.includes('No active') && raw.includes('credential')) {
-        errMsg = `No API key found for this model's provider. Open Hire Agent → Manage tab to add one.`;
-      } else if (raw.includes('exceeded') || raw.includes('quota') || raw.includes('insufficient')) {
-        errMsg = `API key has no credits/quota. Add billing at your provider's dashboard.`;
-      } else if (raw.includes('Kimi Code key') || raw.includes('sk-kimi-')) {
-        errMsg = `Kimi Code keys only work in coding agents. Add a Moonshot platform key instead.`;
-      } else if (raw.includes('Invalid API key') || raw.includes('Incorrect API key') || raw.includes('invalid_api_key')) {
-        errMsg = `Invalid API key. Check your key in Hire Agent → Manage tab.`;
-      } else if (raw.includes('AI provider call failed')) {
-        // Extract the useful part after "AI provider call failed:"
-        const detailMatch = raw.match(/details?:\s*(.+)/i) || raw.match(/failed:\s*(.+)/i);
-        errMsg = detailMatch ? detailMatch[1] : raw;
+    } catch (err: unknown) {
+      // Check for tier limit 403 — show upgrade prompt
+      const errObj = err && typeof err === 'object' ? err as Record<string, unknown> : null;
+      if (errObj && errObj.status === 403 && typeof errObj.message === 'string' && errObj.message.includes('limit')) {
+        setUpgradePrompt({
+          limitType: (errObj.limitType as string) || 'concurrentTasks',
+          plan: (errObj.plan as PlanTier) || 'free',
+          current: (errObj.current as number) || 0,
+          max: (errObj.max as number) || 0,
+        });
+        // Revert the local task to pending so user can retry
+        setTasks(prev => prev.map(t =>
+          t.id === localTask.id ? { ...t, status: 'pending' as const } : t
+        ));
+        setAgents(prev => prev.map(a =>
+          a.id === capturedAgent ? { ...a, currentTask: undefined, isWorking: false } : a
+        ));
+        return;
       }
+
+      // Extract message from Error instances, ApiError plain objects, or strings
+      let raw = '';
+      if (err instanceof Error) {
+        raw = err.message;
+      } else if (typeof err === 'string') {
+        raw = err;
+      } else if (err && typeof err === 'object') {
+        const obj = err as Record<string, unknown>;
+        if (typeof obj.message === 'string') raw = obj.message;
+        else if (typeof obj.error === 'string') raw = obj.error;
+        else if (typeof obj.details === 'string') raw = obj.details;
+        else raw = JSON.stringify(err);
+      }
+      if (!raw) raw = 'Something went wrong. Please try again.';
+      console.error('Task error:', err);
+      const errMsg = friendlyError(raw);
       setTasks(prev => prev.map(t =>
         t.id === localTask.id ? { ...t, status: 'failed' as const, errorMessage: errMsg } : t
       ));
@@ -996,6 +1041,101 @@ const OfficeCanvas: React.FC = () => {
         }
       });
 
+      // ── Ornate frame border (left, right, bottom only) ────────────
+      // No top frame — the office wall tiles handle the top edge.
+      const FRAME = 18; // total frame thickness (px)
+
+      ctx.save();
+
+      // Helper: draw a U-shaped path (left, bottom, right — no top)
+      const uPath = (inset: number) => {
+        ctx.beginPath();
+        ctx.moveTo(inset, 0);             // top of left edge
+        ctx.lineTo(inset, height - inset); // down left side
+        ctx.lineTo(width - inset, height - inset); // across bottom
+        ctx.lineTo(width - inset, 0);     // up right side
+      };
+
+      // Outer dark edge (thick base)
+      uPath(FRAME / 2);
+      ctx.strokeStyle = '#0a0a14';
+      ctx.lineWidth = FRAME;
+      ctx.stroke();
+
+      // Raised outer ridge
+      uPath(2);
+      ctx.strokeStyle = '#3a3552';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Outer groove shadow
+      uPath(4);
+      ctx.strokeStyle = '#1a1528';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Main body gradient strips (bottom, left, right — no top)
+
+      // Bottom strip
+      const bGrad = ctx.createLinearGradient(0, height - FRAME, 0, height);
+      bGrad.addColorStop(0, '#1a1528');
+      bGrad.addColorStop(0.3, '#241f38');
+      bGrad.addColorStop(0.5, '#2e2848');
+      bGrad.addColorStop(0.7, '#3d3560');
+      bGrad.addColorStop(1, '#2a2440');
+      ctx.fillStyle = bGrad;
+      ctx.fillRect(6, height - FRAME + 4, width - 12, FRAME - 10);
+
+      // Left strip (full height — runs from top to bottom frame)
+      const lGrad = ctx.createLinearGradient(0, 0, FRAME, 0);
+      lGrad.addColorStop(0, '#2a2440');
+      lGrad.addColorStop(0.3, '#3d3560');
+      lGrad.addColorStop(0.5, '#2e2848');
+      lGrad.addColorStop(0.7, '#241f38');
+      lGrad.addColorStop(1, '#1a1528');
+      ctx.fillStyle = lGrad;
+      ctx.fillRect(6, 0, FRAME - 10, height - FRAME);
+
+      // Right strip (full height)
+      const rGrad = ctx.createLinearGradient(width - FRAME, 0, width, 0);
+      rGrad.addColorStop(0, '#1a1528');
+      rGrad.addColorStop(0.3, '#241f38');
+      rGrad.addColorStop(0.5, '#2e2848');
+      rGrad.addColorStop(0.7, '#3d3560');
+      rGrad.addColorStop(1, '#2a2440');
+      ctx.fillStyle = rGrad;
+      ctx.fillRect(width - FRAME + 4, 0, FRAME - 10, height - FRAME);
+
+      // Inner highlight ridge (U-shaped)
+      uPath(FRAME - 2);
+      ctx.strokeStyle = '#4a4270';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Inner shadow line (U-shaped)
+      uPath(FRAME);
+      ctx.strokeStyle = '#0d0b18';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Subtle inner glow (U-shaped)
+      uPath(FRAME + 1);
+      ctx.strokeStyle = 'rgba(100, 80, 160, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Corner accents — bottom corners only (no top corners)
+      const CA = 6;
+      ctx.fillStyle = '#4a4270';
+      ctx.fillRect(2, height - CA - 2, CA, CA);               // bottom-left
+      ctx.fillRect(width - CA - 2, height - CA - 2, CA, CA);  // bottom-right
+
+      ctx.fillStyle = '#5d5588';
+      ctx.fillRect(3, height - CA - 1, CA - 2, CA - 2);
+      ctx.fillRect(width - CA - 1, height - CA - 1, CA - 2, CA - 2);
+
+      ctx.restore();
+
       // (Brand moved to top nav bar)
     };
 
@@ -1227,16 +1367,19 @@ const OfficeCanvas: React.FC = () => {
                 {tasks.filter(t => t.status === 'failed').slice(-3).reverse().map(task => {
                   const agent = agents.find(a => a.id === task.assignee);
                   return (
-                    <div key={task.id} className="feed-task failed">
+                    <div key={task.id} className="feed-task failed has-result"
+                         onClick={() => setViewingFailedTask(task.id)}
+                         style={{ cursor: 'pointer' }}>
                       <div className="feed-task-header">
                         <span className="feed-task-status error">Failed</span>
                         <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
-                        <button className="feed-task-delete" onClick={() => removeTask(task.id)}>
+                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
                           <Trash2 size={11} />
                         </button>
                       </div>
                       <div className="feed-task-title">{task.name}</div>
-                      <div className="feed-task-error">{task.errorMessage || 'Unknown error'}</div>
+                      <div className="feed-task-error">{task.errorMessage || 'Something went wrong. Check your API key and billing.'}</div>
+                      <div className="feed-task-view">Click to view details</div>
                     </div>
                   );
                 })}
@@ -1468,16 +1611,19 @@ const OfficeCanvas: React.FC = () => {
                 {tasks.filter(t => t.status === 'failed').map(task => {
                   const agent = agents.find(a => a.id === task.assignee);
                   return (
-                    <div key={task.id} className="feed-task failed">
+                    <div key={task.id} className="feed-task failed has-result"
+                         onClick={() => setViewingFailedTask(task.id)}
+                         style={{ cursor: 'pointer' }}>
                       <div className="feed-task-header">
                         <span className="feed-task-status error">Failed</span>
                         <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
-                        <button className="feed-task-delete" onClick={() => removeTask(task.id)}>
+                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
                           <Trash2 size={11} />
                         </button>
                       </div>
                       <div className="feed-task-title">{task.name}</div>
-                      <div className="feed-task-error">{task.errorMessage || 'Unknown error'}</div>
+                      <div className="feed-task-error">{task.errorMessage || 'Something went wrong. Check your API key and billing.'}</div>
+                      <div className="feed-task-view">Click to view details</div>
                     </div>
                   );
                 })}
@@ -1539,7 +1685,20 @@ const OfficeCanvas: React.FC = () => {
           <div className="task-result-modal" onClick={e => e.stopPropagation()}>
             <div className="task-result-header">
               <h2>Task Result</h2>
-              <button className="close-btn" onClick={() => setViewingTaskResult(null)}><X size={16} /></button>
+              <div className="task-result-header-actions">
+                <button
+                  className="download-response-btn"
+                  onClick={() => {
+                    const task = tasks.find(t => t.id === viewingTaskResult);
+                    downloadAsMarkdown(taskResults[viewingTaskResult!], task?.name || 'task-result');
+                  }}
+                  title="Download as .md"
+                >
+                  <Download size={14} />
+                  Download
+                </button>
+                <button className="close-btn" onClick={() => setViewingTaskResult(null)}><X size={16} /></button>
+              </div>
             </div>
             <div className="task-result-info">
               {(() => {
@@ -1581,6 +1740,13 @@ const OfficeCanvas: React.FC = () => {
                           Copy
                         </button>
                         <button
+                          className="code-block-download"
+                          onClick={() => downloadCodeBlock(seg.content, seg.language)}
+                          title="Download file"
+                        >
+                          <Download size={10} />
+                        </button>
+                        <button
                           className="code-block-open"
                           onClick={async (e) => {
                             const btn = e.currentTarget;
@@ -1609,6 +1775,39 @@ const OfficeCanvas: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Failed task detail modal */}
+      {viewingFailedTask && (() => {
+        const failedTask = tasks.find(t => t.id === viewingFailedTask);
+        if (!failedTask) return null;
+        const failedAgent = agents.find(a => a.id === failedTask.assignee);
+        return (
+          <div className="task-result-overlay" onClick={() => setViewingFailedTask(null)}>
+            <div className="task-result-modal" onClick={e => e.stopPropagation()}>
+              <div className="task-result-header">
+                <h2>Task Failed</h2>
+                <button className="close-btn" onClick={() => setViewingFailedTask(null)}><X size={16} /></button>
+              </div>
+              <div className="task-result-info">
+                <div className="result-meta">
+                  <span className="result-task-title">{failedTask.name}</span>
+                  <span className="result-agent">{failedAgent?.name || 'Agent'}</span>
+                  {failedTask.modelUsed && <span className="result-model">{failedTask.modelUsed}</span>}
+                </div>
+                {failedTask.description && <div className="result-description">{failedTask.description}</div>}
+              </div>
+              <div className="task-failed-content">
+                <div className="task-failed-icon">!</div>
+                <div className="task-failed-message">{failedTask.errorMessage || 'Something went wrong. Check your API key and billing.'}</div>
+                <div className="task-failed-hint">
+                  Check your API key and billing status in the Hire Agent &gt; Manage tab.
+                  If the issue persists, try a different model or provider.
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Meeting Room — extracted to separate component */}
       <MeetingRoom
@@ -1736,10 +1935,27 @@ const OfficeCanvas: React.FC = () => {
         />
       )}
 
+      {/* Upgrade prompt (shown when user hits a tier limit) */}
+      {upgradePrompt && (
+        <UpgradePrompt
+          limitType={upgradePrompt.limitType}
+          plan={upgradePrompt.plan}
+          current={upgradePrompt.current}
+          max={upgradePrompt.max}
+          onClose={() => setUpgradePrompt(null)}
+          onUpgrade={() => {
+            setUpgradePrompt(null);
+            setSettingsTab('billing');
+            setShowAccountSettings(true);
+          }}
+        />
+      )}
+
       {/* Account Settings Modal (with logout + delete account) */}
       <AccountSettingsModal
         isOpen={showAccountSettings}
-        onClose={() => setShowAccountSettings(false)}
+        onClose={() => { setShowAccountSettings(false); setSettingsTab('account'); }}
+        initialTab={settingsTab}
       />
 
       {/* Office Footer */}

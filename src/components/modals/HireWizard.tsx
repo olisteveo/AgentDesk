@@ -146,9 +146,13 @@ const HireWizard: React.FC<HireWizardProps> = ({
         setValidated(false);
         setValidationError(result.error || 'Invalid API key');
       }
-    } catch (err) {
+    } catch (err: unknown) {
       setValidated(false);
-      setValidationError(err instanceof Error ? err.message : 'Validation failed');
+      const msg =
+        err instanceof Error ? err.message
+        : err && typeof err === 'object' && 'message' in err ? String((err as Record<string, unknown>).message)
+        : 'Validation failed';
+      setValidationError(msg);
     } finally {
       setValidating(false);
     }
@@ -189,9 +193,13 @@ const HireWizard: React.FC<HireWizardProps> = ({
         setManageValidated(false);
         setManageError(result.error || 'Invalid API key');
       }
-    } catch (err) {
+    } catch (err: unknown) {
       setManageValidated(false);
-      setManageError(err instanceof Error ? err.message : 'Validation failed');
+      const msg =
+        err instanceof Error ? err.message
+        : err && typeof err === 'object' && 'message' in err ? String((err as Record<string, unknown>).message)
+        : 'Validation failed';
+      setManageError(msg);
     } finally {
       setManageValidating(false);
     }

@@ -63,6 +63,7 @@
 .task-log {
   max-height: 80px;
   overflow-y: auto;
+  overflow-x: hidden;
   font-size: 12px;
   color: #aaa;
   border-top: 1px solid #333;
@@ -87,6 +88,8 @@
   padding: 8px 0;
   border-bottom: 1px solid #222;
   line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .task-entry:last-child {
@@ -694,6 +697,7 @@
 .feed-activity-entries {
   max-height: 260px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -705,6 +709,8 @@
   color: rgba(255, 255, 255, 0.45);
   border-left: 2px solid rgba(102, 126, 234, 0.15);
   line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .feed-activity-entry:hover {
@@ -1167,7 +1173,6 @@
   height: 100%;
   border-left: 200px solid transparent;
   border-right: 200px solid transparent;
-  border-bottom: 80px solid transparent;
   box-shadow:
     inset 0 0 80px rgba(0, 0, 0, 0.7),
     inset 10px 0 25px rgba(0, 0, 0, 0.5),
@@ -1243,6 +1248,7 @@
   cursor: default !important;
   max-height: calc(100vh - 360px);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .task-feed-panel:hover {
@@ -1287,6 +1293,7 @@
 .feed-tasks-scroll {
   max-height: 180px;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
 }
@@ -1361,6 +1368,7 @@
   border-radius: 8px;
   padding: 8px 10px;
   transition: all 0.2s;
+  overflow: hidden;
 }
 
 .feed-task.active {
@@ -1379,6 +1387,8 @@
   margin-top: 4px;
   line-height: 1.3;
   opacity: 0.9;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .feed-task-status.error {
@@ -1465,6 +1475,10 @@
   color: #667eea;
   margin-top: 4px;
   text-align: center;
+}
+
+.feed-task.failed .feed-task-view {
+  color: #ff6b6b;
 }
 
 .feed-empty {
@@ -1609,6 +1623,56 @@
   flex-shrink: 0;
 }
 
+.code-block-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  background: rgba(29, 209, 161, 0.1);
+  border: 1px solid rgba(29, 209, 161, 0.2);
+  color: rgba(29, 209, 161, 0.85);
+  border-radius: 5px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.code-block-download:hover {
+  background: rgba(29, 209, 161, 0.22);
+  border-color: rgba(29, 209, 161, 0.4);
+  color: #fff;
+}
+
+/* Task result header actions (download + close) */
+.task-result-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.download-response-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: rgba(29, 209, 161, 0.12);
+  border: 1px solid rgba(29, 209, 161, 0.25);
+  color: #1dd1a1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.download-response-btn:hover {
+  background: rgba(29, 209, 161, 0.22);
+  border-color: rgba(29, 209, 161, 0.4);
+  color: #fff;
+}
+
 .code-block pre {
   margin: 0;
   padding: 14px 16px;
@@ -1681,4 +1745,47 @@
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
+}
+
+/* Failed task detail modal */
+.task-failed-content {
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.task-failed-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 107, 107, 0.15);
+  border: 2px solid rgba(255, 107, 107, 0.3);
+  color: #ff6b6b;
+  font-size: 24px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-failed-message {
+  font-size: 14px;
+  color: #ff6b6b;
+  line-height: 1.6;
+  padding: 12px 16px;
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.15);
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.task-failed-hint {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+  max-width: 380px;
 }

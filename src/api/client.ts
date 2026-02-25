@@ -11,6 +11,11 @@
 export interface ApiError {
   status: number;
   message: string;
+  // Tier limit metadata (present on 403 limit-reached responses)
+  limitType?: string;
+  current?: number;
+  max?: number;
+  plan?: string;
 }
 
 // ── Token helpers ────────────────────────────────────────────
@@ -123,7 +128,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
     if (body.details) {
       message += `: ${body.details}`;
     }
-    throw createApiError(res.status, message);
+    throw createApiError(res.status, message, body);
   }
   // 204 No Content — no body to parse
   if (res.status === 204) return undefined as T;
@@ -132,6 +137,18 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 // ── Error factory ────────────────────────────────────────────
 
-function createApiError(status: number, message: string): ApiError {
-  return { status, message };
+function createApiError(
+  status: number,
+  message: string,
+  body?: Record<string, unknown>,
+): ApiError {
+  return {
+    status,
+    message,
+    // Pass through tier limit metadata when present (403 limit-reached)
+    limitType: body?.limitType as string | undefined,
+    current: body?.current as number | undefined,
+    max: body?.max as number | undefined,
+    plan: body?.plan as string | undefined,
+  };
 }

@@ -478,8 +478,104 @@ spec:
 | Providers | 1 | Unlimited | Unlimited |
 | Cost history | 7 days | 1 year | Unlimited |
 | Whiteboard | Basic | Full | Full + Export |
+| File export | Browser download | Browser + Local Agent | Full + API |
 | API access | No | Yes | Yes + Webhooks |
 | Support | Community | Email | Slack + Phone |
+
+### 9. File Export & Local Agent System
+
+#### Current: Browser Download (All Tiers)
+
+The browser-based file export system provides a zero-setup way for users to
+save AI-generated content to their local machine. No backend changes are
+required -- downloads are created entirely client-side via Blob + Object URL.
+
+**Architecture:**
+```
+AI Response (text)
+    |
+    v
+src/utils/download.ts
+    |--- downloadFile({ content, filename, mimeType })   // Core: Blob -> <a download> click
+    |--- downloadCodeBlock(code, language, basename?)     // Code blocks -> correct extension
+    |--- downloadAsMarkdown(content, title?)              // Full response -> .md file
+    |
+    v
+Browser Downloads folder
+```
+
+**Integration points:**
+- **Task result modal:** "Download" button in header exports entire response as `.md`
+- **Code blocks (task results, meetings, transcripts):** Download icon button on each
+  code block header exports the block with the correct file extension (`.ts`, `.py`, etc.)
+- Extension mapping reuses `LANG_EXTENSIONS` from `parseCodeBlocks.ts` for consistency
+
+**MIME type resolution:**
+- Extension inferred from filename or language
+- Comprehensive map covering all supported languages (markdown, json, python, typescript, etc.)
+- Falls back to `text/plain` for unknown types
+
+**Limitations (by design for Free tier):**
+- Files land in the browser's Downloads folder only (no path control)
+- No filesystem write access (browser sandbox)
+- No automated file creation workflows
+- Single file per download (no batch/zip)
+
+#### Future: Local Agent CLI (Pro & Enterprise Only)
+
+A lightweight local companion process that bridges the gap between the
+browser-based dashboard and the user's filesystem. This is a premium feature
+that provides direct filesystem access, automated file workflows, and
+integration with local development tools.
+
+**Planned capabilities:**
+- Direct file writes to any user-specified directory
+- Watch mode: auto-export task results to a project folder as they complete
+- Batch export: download all task results / meeting transcripts at once
+- Template support: custom output formats (e.g. JSDoc headers, README structure)
+- Git integration: auto-commit generated files to a local repo
+- IDE bridge: richer VS Code integration beyond the current `vscode://` URI scheme
+
+**Technical approach:**
+```
+Browser (React app)
+    |
+    | WebSocket / HTTP
+    v
+Local Agent (Node.js CLI or Electron/Tauri)
+    |
+    | fs.writeFile, child_process
+    v
+User's filesystem, git, IDE
+```
+
+**Implementation options (to be decided):**
+1. **Node.js CLI** -- `npx agentdesk-local` or global install, lightweight,
+   connects via WebSocket to the backend, receives task outputs, writes files.
+   Lowest development cost, cross-platform via Node.
+2. **Electron app** -- Tray icon, always-on, richer UI for config. Higher
+   development cost but better UX.
+3. **Tauri app** -- Rust-based, smaller binary than Electron, native
+   performance. Higher development cost but smallest footprint.
+4. **VS Code extension** -- Runs inside the editor, deepest IDE integration.
+   Limited to VS Code users but natural fit for developer audience.
+
+**Authentication:** The local agent authenticates with the same JWT token as
+the browser session. A one-time pairing flow (scan QR code or paste token)
+links the local agent to the user's account.
+
+**Security considerations:**
+- Local agent runs with user's OS permissions (not elevated)
+- File writes sandboxed to user-configured directories only
+- No remote code execution -- agent only writes content, never runs it
+- All communication encrypted (WSS/HTTPS)
+- Token-scoped to the team, revocable from the dashboard
+
+**Monetisation rationale:**
+- Free tier: browser download covers basic export needs
+- Pro tier: local agent unlocks developer workflows (direct filesystem, git, IDE)
+- Enterprise tier: API access for programmatic export and CI/CD integration
+- Clear value ladder -- each tier adds meaningful capability, not just limits
 
 ## Implementation Phases
 
@@ -495,6 +591,14 @@ spec:
 - Whiteboard persistence
 - Billing/subscriptions
 
+**Phase 2.5 (File Export):**
+- [x] Browser download utility (`src/utils/download.ts`)
+- [x] Download buttons on code blocks and task results
+- [ ] Local Agent CLI (Pro tier) -- design + prototype
+- [ ] Local Agent pairing flow (QR/token)
+- [ ] Auto-export watch mode
+- [ ] VS Code extension (optional, evaluate demand)
+
 **Phase 3 (Scale):**
 - Advanced analytics
 - Custom agents
@@ -507,5 +611,6 @@ spec:
 2. **WebSocket vs SSE:** WebSocket for bidirectional, SSE fallback
 3. **Cost tracking:** Real-time via webhooks + daily reconciliation job
 4. **Data retention:** 90 days hot, 2 years cold (S3)
+5. **Local Agent tech:** Node.js CLI (lowest cost) vs Tauri (best UX) -- decide after Pro tier launch
 
 **Estimated infra cost at 100 teams:** ~$500/month (before profit)

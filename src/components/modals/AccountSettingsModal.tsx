@@ -7,6 +7,7 @@ import { Check, Zap, Eye, EyeOff } from 'lucide-react';
 interface AccountSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: 'account' | 'billing';
 }
 
 type Tab = 'account' | 'billing';
@@ -22,11 +23,16 @@ const s = {
   divider: { borderTop: '1px solid #333', paddingTop: '20px', marginTop: '20px' } as React.CSSProperties,
 };
 
-export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onClose }) => {
+export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onClose, initialTab }) => {
   const navigate = useNavigate();
   const { user, logout, updateUser } = useAuth();
 
-  const [tab, setTab] = useState<Tab>('account');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'account');
+
+  // Sync tab when initialTab prop changes (e.g. upgrade prompt opens billing)
+  React.useEffect(() => {
+    if (initialTab && isOpen) setTab(initialTab);
+  }, [initialTab, isOpen]);
 
   // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
