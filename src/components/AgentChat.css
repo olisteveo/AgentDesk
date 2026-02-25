@@ -1,0 +1,439 @@
+/* ═══════════════════════════════════════════════════════════
+   AgentChat — 1-on-1 chat panel
+   Glass-morphic dark theme matching the rest of Agent Desk
+   ═══════════════════════════════════════════════════════════ */
+
+.ac-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(5, 5, 15, 0.6);
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  z-index: 10000;
+  backdrop-filter: blur(8px);
+}
+
+.ac-panel {
+  width: 440px;
+  max-width: 100%;
+  height: 100vh;
+  background: linear-gradient(180deg, #0d0d1a 0%, #111125 100%);
+  border-left: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.7);
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+
+.ac-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.ac-header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ac-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.15));
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #8b9cf7;
+}
+
+.ac-agent-name {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ac-model-tag {
+  font-size: 10px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.ac-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ac-icon-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.4);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.ac-icon-btn:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+  border-color: rgba(255, 107, 107, 0.25);
+}
+
+.ac-icon-btn.close:hover {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Messages area ─────────────────────────────────────────── */
+
+.ac-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.ac-messages::-webkit-scrollbar { width: 5px; }
+.ac-messages::-webkit-scrollbar-track { background: transparent; }
+.ac-messages::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+/* ── Empty state ───────────────────────────────────────────── */
+
+.ac-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  gap: 8px;
+  padding: 40px 20px;
+}
+
+.ac-empty-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.1));
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #8b9cf7;
+  margin-bottom: 8px;
+}
+
+.ac-empty h3 {
+  color: #ccc;
+  font-size: 16px;
+  margin: 0;
+}
+
+.ac-empty p {
+  color: #666;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 280px;
+}
+
+/* ── Loading ───────────────────────────────────────────────── */
+
+.ac-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.ac-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #333;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: ac-spin 0.8s linear infinite;
+}
+
+@keyframes ac-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Message bubbles ───────────────────────────────────────── */
+
+.ac-msg {
+  display: flex;
+  gap: 10px;
+  max-width: 85%;
+}
+
+.ac-msg.me {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.ac-msg.agent {
+  align-self: flex-start;
+}
+
+.ac-msg-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.15));
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8b9cf7;
+  flex-shrink: 0;
+}
+
+.ac-msg-content {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid #2a2a3a;
+}
+
+.ac-msg.me .ac-msg-content {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+}
+
+.ac-msg-sender {
+  font-size: 11px;
+  color: #667eea;
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ac-msg-model {
+  font-size: 9px;
+  font-weight: 500;
+  color: #8b9cf7;
+  background: rgba(102, 126, 234, 0.12);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  letter-spacing: 0.3px;
+}
+
+.ac-msg-text {
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ac-msg-time {
+  font-size: 9px;
+  color: #666;
+  margin-top: 5px;
+  text-align: right;
+}
+
+.ac-msg.me .ac-msg-time {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Thinking indicator ────────────────────────────────────── */
+
+.ac-thinking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+}
+
+.ac-thinking-dots {
+  display: flex;
+  gap: 5px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  border: 1px solid #2a2a3a;
+}
+
+.ac-thinking-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #667eea;
+  animation: ac-dot 1.4s ease-in-out infinite;
+}
+
+.ac-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.ac-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes ac-dot {
+  0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
+  30% { opacity: 1; transform: scale(1); }
+}
+
+/* ── Input area ────────────────────────────────────────────── */
+
+.ac-input-area {
+  display: flex;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid #333;
+  background: rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+}
+
+.ac-input {
+  flex: 1;
+  padding: 12px 18px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
+  border-radius: 22px;
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ac-input:focus {
+  border-color: #667eea;
+}
+
+.ac-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ac-input::placeholder {
+  color: #666;
+}
+
+.ac-send-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ac-send-btn:hover:not(:disabled) {
+  transform: scale(1.08);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
+}
+
+.ac-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Code blocks ───────────────────────────────────────────── */
+
+.ac-code-block {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #333;
+  border-radius: 8px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.ac-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid #333;
+}
+
+.ac-code-lang {
+  font-size: 10px;
+  color: #667eea;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.ac-code-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ac-code-btn {
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #aaa;
+  font-size: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.2s;
+}
+
+.ac-code-btn:hover {
+  color: #fff;
+  border-color: #667eea;
+}
+
+.ac-code-btn.vs:hover {
+  color: #007acc;
+}
+
+.ac-code-block pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.ac-code-block code {
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 12px;
+  color: #e0e0e0;
+  line-height: 1.5;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+
+@media (max-width: 500px) {
+  .ac-panel {
+    width: 100%;
+  }
+}

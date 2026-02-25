@@ -17,15 +17,15 @@
 │                 │  │  Queue)  │   │  Service │
 └─────────────────┘  └──────────┘   └──────────┘
                                            │
-                    ┌──────────────────────┼──────────────────────┐
-                    ▼                      ▼                      ▼
-              ┌──────────┐          ┌──────────┐          ┌──────────┐
-              │ OpenAI   │          │ Anthropic│          │ Moonshot │
-              │ API      │          │ API      │          │ API      │
-              └──────────┘          └──────────┘          └──────────┘
+              ┌───────────────┬───────────┼───────────┬───────────┐
+              ▼               ▼           ▼           ▼
+        ┌──────────┐   ┌──────────┐ ┌──────────┐ ┌──────────┐
+        │ OpenAI   │   │ Anthropic│ │ Google   │ │ Moonshot │
+        │ API      │   │ API      │ │ (Gemini) │ │ API      │
+        └──────────┘   └──────────┘ └──────────┘ └──────────┘
 ```
 
-## Key Architecture Decisions (2026-02-18)
+## Key Architecture Decisions (Updated 2026-02-25)
 
 ### Desk System Design
 - **Default state:** CEO Office, Operations, Meeting Room only
@@ -44,6 +44,18 @@
 - **Scrollable canvas:** Vertical scroll for unlimited desk expansion
 - **2-column layout:** CEO/Ops top, desks in pairs below, Meeting Room at bottom
 - **Responsive:** Canvas min-height 1200px, scales with content
+
+### Rules & Governance Design
+- **Three-layer hierarchy:** Core Preset (team-wide, hardcoded) → Team Rules (user-created, all agents) → Desk Rules (user-created, per-agent)
+- **Injection architecture:** `buildRulesPrompt(teamId, deskId)` called at all 4 AI callpoints (task exec, task chat, desk chat, meetings)
+- **AI suggestions:** Fire-and-forget after task completion, max 5 pending, human approval required
+- **Presets in code, custom rules in DB:** Avoids migration churn for preset changes
+
+### Agent Chat Design
+- **Per-desk persistence:** 50-message cap with auto-prune on insert
+- **Reuses existing AI proxy:** `/api/ai/chat` with full rules injection and cost tracking
+- **Auto-desk-creation:** If a frontend desk has no backend record, AgentChat creates one on first message
+- **Fire-and-forget saves:** Message persistence doesn't block the UI
 
 ## Core Components
 
@@ -68,12 +80,28 @@ POST   /api/v1/agents/assign       # Assign task to agent
 GET    /api/v1/whiteboard          # Get whiteboard state
 POST   /api/v1/whiteboard/update   # Update whiteboard
 WS     /ws/v1/office               # Real-time office state
+
+# Rules (Agent Governance)
+GET    /api/rules                   # List all rules (grouped: team/desk/pending + core preset)
+PATCH  /api/rules/core-preset       # Change core rules preset
+POST   /api/rules                   # Create a rule (tier-limited)
+PATCH  /api/rules/:id              # Update rule fields (title, content, category)
+PATCH  /api/rules/:id/toggle       # Toggle active ↔ disabled
+PATCH  /api/rules/:id/approve      # Approve AI-suggested rule
+PATCH  /api/rules/:id/reject       # Reject AI-suggested rule
+PUT    /api/rules/reorder          # Bulk reorder rules
+DELETE /api/rules/:id              # Delete a rule
+
+# Chat History (1-on-1 Agent Chat)
+GET    /api/chat-history/:deskId    # Fetch messages (newest 50, oldest-first)
+POST   /api/chat-history/:deskId    # Save user+assistant pair, auto-prune beyond 50
+DELETE /api/chat-history/:deskId    # Clear all history for a desk
 ```
 
 **AI Proxy Service:**
 ```typescript
 interface AIRequest {
-  provider: 'openai' | 'anthropic' | 'moonshot';
+  provider: 'openai' | 'anthropic' | 'google' | 'moonshot';
   model: string;
   messages: Message[];
   teamId: string;
@@ -120,6 +148,7 @@ create table teams (
   slug text unique not null,
   plan text default 'free', -- free, pro, enterprise
   monthly_budget decimal(10,2) default 100.00,
+  core_rules_preset varchar(50), -- startup_fast, professional, creative, technical, customer_first
   created_at timestamptz default now()
 );
 
@@ -192,6 +221,36 @@ create table office_sessions (
   socket_id text,
   agent_positions jsonb, -- current positions on canvas
   last_activity timestamptz default now()
+);
+
+-- Agent Rules (Governance)
+create table team_rules (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  desk_id uuid references desks(id) on delete cascade, -- NULL = team-wide
+  scope text not null default 'team',    -- team | desk
+  title varchar(255) not null,
+  content text not null,
+  category varchar(50) default 'general', -- tone/format/safety/workflow/domain/general
+  status text default 'active',           -- active/disabled/pending/rejected
+  sort_order int default 0,
+  created_by uuid references users(id) on delete set null,
+  suggested_by_desk_id uuid references desks(id) on delete set null,
+  suggestion_context text,                -- task title that triggered AI suggestion
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Chat Messages (1-on-1 agent conversations, capped at 50 per desk)
+create table chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  desk_id uuid not null references desks(id) on delete cascade,
+  role varchar(10) not null check (role in ('user', 'assistant')),
+  content text not null,
+  model varchar(100),
+  cost_usd numeric(12,8) default 0,
+  created_at timestamptz not null default now()
 );
 ```
 
@@ -479,6 +538,10 @@ spec:
 | Cost history | 7 days | 1 year | Unlimited |
 | Whiteboard | Basic | Full | Full + Export |
 | File export | Browser download | Browser + Local Agent | Full + API |
+| Custom rules | 10 | 50 | Unlimited |
+| AI rule suggestions | Yes | Yes | Yes |
+| Agent Chat (1-on-1) | Yes | Yes | Yes |
+| Chat history / desk | 50 messages | 50 messages | 50 messages |
 | API access | No | Yes | Yes + Webhooks |
 | Support | Community | Email | Slack + Phone |
 
@@ -577,6 +640,92 @@ links the local agent to the user's account.
 - Enterprise tier: API access for programmatic export and CI/CD integration
 - Clear value ladder -- each tier adds meaningful capability, not just limits
 
+### 10. Rules System (Agent Governance)
+
+Rules are behavioural instructions injected into every AI system prompt. Three layers ensure flexibility: a team-wide Core Preset provides a foundation, Team Rules apply to all agents, and Desk Rules let users fine-tune individual agents.
+
+**Core Rules Presets (5 built-in, immutable):**
+
+| Preset | Focus | Example Rules |
+|--------|-------|--------------|
+| `startup_fast` | Speed & action | Be concise, bias towards action, flag trade-offs |
+| `professional` | Structure & rigour | Structure responses, be thorough, cite reasoning |
+| `creative` | Lateral thinking | Think laterally, write with personality, embrace iteration |
+| `technical` | Precision & code | Code over prose, be technically precise, include error handling |
+| `customer_first` | Empathy & clarity | Lead with empathy, explain step by step, end with next step |
+
+Stored as `teams.core_rules_preset` column. Preset definitions are hardcoded in `src/utils/coreRulesPresets.ts` (both backend and frontend). Selected during onboarding, changeable any time via the Rules Dashboard.
+
+**Rule Injection Flow:**
+```
+Task / Chat / Meeting request arrives
+         │
+         ▼
+buildRulesPrompt(teamId, deskId)
+  ├── Fetch team.core_rules_preset → format Core Rules block
+  ├── Fetch team_rules WHERE scope='team' AND status='active'
+  └── Fetch team_rules WHERE desk_id=X AND status='active'
+         │
+         ▼
+Concatenate: Core Rules → Team Rules → Desk Rules
+         │
+         ▼
+Append to system prompt at all 4 callpoints:
+  • Task execution  (/api/tasks/:id/run)
+  • Task chat       (/api/tasks/:id/chat)
+  • Desk chat       (/api/ai/chat)
+  • Meetings        (/api/meetings)
+```
+
+**AI Rule Suggestions:**
+After task completion, `suggestRulesFromTask()` fires asynchronously (fire-and-forget). Sends task context to AI with a process-improvement prompt. AI returns 0-2 suggestions as JSON, inserted as `status='pending'`. Max 5 pending at a time. Users approve/reject/edit from the Rules Dashboard Suggestions tab.
+
+**Tier Limits:**
+`enforceRuleLimit` middleware gates rule creation — Free: 10 rules, Pro: 50, Enterprise: unlimited.
+
+**Frontend:**
+- `RulesDashboard.tsx` — modal with 4 tabs (Core, Team, Per Desk, Suggestions)
+- `RulesPanel.tsx` — sidebar preview showing active count + first 3 rule titles
+- Onboarding integration — core preset selection as part of team setup
+
+### 11. Agent Chat (1-on-1 Conversations)
+
+Persistent 1-on-1 chat between users and individual AI agents. Clicking an agent in the Team sidebar opens a chat panel. History is server-side and loaded on open. Uses the existing `/api/ai/chat` endpoint (with full rules injection) for completions.
+
+**Persistence Strategy:**
+- Messages stored in `chat_messages` table, capped at **50 messages per desk**
+- On each POST, oldest messages beyond the cap are pruned automatically (DELETE subquery)
+- Three operations: fetch (GET, newest 50 ordered ASC), save pair (POST), clear (DELETE)
+- Fire-and-forget persistence — saving doesn't block the UI
+
+**Architecture:**
+```
+User clicks agent in Team sidebar
+         │
+         ▼
+AgentChat.tsx mounts
+  ├── resolveBackendDeskId() — auto-creates backend desk if needed
+  ├── getChatHistory(deskId) — loads last 50 messages
+  └── Renders 440px right-side glass-morphic panel
+         │
+   User sends message
+         │
+         ▼
+sendChat(deskId, messages) → POST /api/ai/chat
+  └── Rules injected, proxied to provider, cost tracked
+         │
+         ▼
+saveChatMessages(deskId, user, assistant, model, cost)
+  └── POST /api/chat-history/:deskId — saves pair + auto-prunes
+```
+
+**Features:**
+- Code block rendering with syntax highlighting + copy/download/VS Code buttons
+- Cost tracking per message (aggregated in parent component)
+- Model tag on each assistant message
+- Clear history action
+- Responsive: full-width under 500px
+
 ## Implementation Phases
 
 **Phase 1 (MVP - 4 weeks):**
@@ -599,6 +748,19 @@ links the local agent to the user's account.
 - [ ] Auto-export watch mode
 - [ ] VS Code extension (optional, evaluate demand)
 
+**Phase 2.7 (Rules + Agent Chat):**
+- [x] Rules migration (`009_rules.sql`, `010_core_rules_preset.sql`)
+- [x] Chat messages migration (`011_chat_messages.sql`)
+- [x] Rules CRUD API (9 endpoints)
+- [x] Chat history API (3 endpoints)
+- [x] Core rules presets (5 presets, onboarding integration)
+- [x] Rule injection at all AI callpoints (tasks, chat, meetings)
+- [x] AI rule suggestion engine (fire-and-forget after tasks)
+- [x] Tier-limited rule creation (`enforceRuleLimit` middleware)
+- [x] Rules Dashboard UI (4-tab modal: Core / Team / Desk / Suggestions)
+- [x] Agent Chat panel (glass-morphic floating panel, history persistence)
+- [ ] Rules analytics (most-triggered rules, suggestion acceptance rate)
+
 **Phase 3 (Scale):**
 - Advanced analytics
 - Custom agents
@@ -612,5 +774,7 @@ links the local agent to the user's account.
 3. **Cost tracking:** Real-time via webhooks + daily reconciliation job
 4. **Data retention:** 90 days hot, 2 years cold (S3)
 5. **Local Agent tech:** Node.js CLI (lowest cost) vs Tauri (best UX) -- decide after Pro tier launch
+6. **Rules storage:** Presets hardcoded in app code (not DB rows) — avoids migration churn, keeps presets versioned with code. Custom rules in DB.
+7. **Chat history cap:** 50 messages per desk, auto-pruned on insert — keeps storage bounded without needing a background cleanup job.
 
 **Estimated infra cost at 100 teams:** ~$500/month (before profit)

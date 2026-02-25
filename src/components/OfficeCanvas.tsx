@@ -29,6 +29,7 @@ import { downloadCodeBlock, downloadAsMarkdown } from '../utils/download';
 import { friendlyError } from '../utils/friendlyErrors';
 import UpgradePrompt from './modals/UpgradePrompt';
 import RulesDashboard from './modals/RulesDashboard';
+import AgentChat from './AgentChat';
 import { listRules } from '../api/rules';
 import { CORE_RULES_PRESETS } from '../utils/coreRulesPresets';
 import type { PlanTier } from '../utils/tierConfig';
@@ -178,6 +179,9 @@ const OfficeCanvas: React.FC = () => {
   const [rulesPreview, setRulesPreview] = useState<string[]>([]);
   const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0);
   const [corePresetName, setCorePresetName] = useState<string | null>(null);
+
+  // Agent chat state (1-on-1 chat panel)
+  const [chatAgent, setChatAgent] = useState<Agent | null>(null);
 
   // Upgrade prompt state (shown when user hits a tier limit)
   const [upgradePrompt, setUpgradePrompt] = useState<{
@@ -1569,7 +1573,12 @@ const OfficeCanvas: React.FC = () => {
           <h3>Team</h3>
           <div className="agents-grid">
             {agents.filter(a => a.id !== 'ceo').map(agent => (
-              <div key={agent.id} className={`agent-mini-desk ${agent.isWorking ? 'working' : ''}`}>
+              <div
+                key={agent.id}
+                className={`agent-mini-desk ${agent.isWorking ? 'working' : ''}`}
+                onClick={() => setChatAgent(agent)}
+                title={`Chat with ${agent.name}`}
+              >
                 <div className="mini-desk">
                   <div className="mini-monitor"></div>
                   <div className="mini-status" style={{ background: agent.isWorking ? '#1dd1a1' : '#666' }}></div>
@@ -2089,6 +2098,19 @@ const OfficeCanvas: React.FC = () => {
           };
         })}
       />
+
+      {chatAgent && (
+        <AgentChat
+          agent={chatAgent}
+          deskAssignments={deskAssignments}
+          setDeskAssignments={setDeskAssignments}
+          getModelForAgent={getModelForAgent}
+          updateTodayCost={updateTodayCost}
+          addLogEntry={addLogEntry}
+          onClose={() => setChatAgent(null)}
+          modelPricing={MODEL_PRICING}
+        />
+      )}
 
       {/* Office Footer */}
       <div className="office-footer">
