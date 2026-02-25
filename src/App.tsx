@@ -9,6 +9,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { VerifyEmailWaitPage } from './pages/VerifyEmailWaitPage';
 import { SelectPlanPage } from './pages/SelectPlanPage';
+import { ConfirmEmailChangePage } from './pages/ConfirmEmailChangePage';
 
 const App: FC = () => {
   return (
@@ -20,6 +21,7 @@ const App: FC = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/confirm-email-change" element={<ConfirmEmailChangePage />} />
 
           {/* Authenticated but pre-office funnel */}
           <Route path="/verify-email-wait" element={<VerifyEmailWaitPage />} />

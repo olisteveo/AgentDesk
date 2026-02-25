@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { deleteAccount, selectPlan, changePassword } from '../../api/auth';
+import { deleteAccount, selectPlan, changePassword, changeEmail } from '../../api/auth';
 import { Check, Zap, Eye, EyeOff } from 'lucide-react';
 
 interface AccountSettingsModalProps {
@@ -55,12 +55,22 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [showDeletePw, setShowDeletePw] = useState(false);
 
+  // Email change state
+  const [showChangeEmail, setShowChangeEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
+  const [showEmailPw, setShowEmailPw] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [emailSuccess, setEmailSuccess] = useState('');
+  const [emailDevLink, setEmailDevLink] = useState('');
+  const [changingEmail, setChangingEmail] = useState(false);
+
   // Billing state
   const [changingPlan, setChangingPlan] = useState(false);
   const [planError, setPlanError] = useState('');
   const [planSuccess, setPlanSuccess] = useState('');
 
-  // Reset change-password form when modal closes (component stays mounted)
+  // Reset forms when modal closes (component stays mounted)
   useEffect(() => {
     if (!isOpen) {
       setShowChangePassword(false);
@@ -73,6 +83,13 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
       setShowNewPw(false);
       setShowConfirmPw(false);
       setShowDeletePw(false);
+      setShowChangeEmail(false);
+      setNewEmail('');
+      setEmailPassword('');
+      setShowEmailPw(false);
+      setEmailError('');
+      setEmailSuccess('');
+      setEmailDevLink('');
     }
   }, [isOpen]);
 
@@ -134,6 +151,37 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
       setPasswordError(msg);
     } finally {
       setChangingPassword(false);
+    }
+  };
+
+  const handleChangeEmail = async () => {
+    if (!newEmail.trim()) { setEmailError('Please enter a new email address'); return; }
+    if (!emailPassword) { setEmailError('Please enter your current password'); return; }
+
+    setChangingEmail(true);
+    setEmailError('');
+    setEmailSuccess('');
+
+    try {
+      const result = await changeEmail(newEmail.trim(), emailPassword);
+      // In dev mode, when Resend can't deliver, the backend returns
+      // a _dev_emailPreview URL so we can confirm manually.
+      if (result._dev_emailPreview) {
+        setEmailSuccess(`${result.message}`);
+        setEmailDevLink(result._dev_emailPreview);
+      } else {
+        setEmailSuccess(result.message);
+        setEmailDevLink('');
+      }
+      setNewEmail('');
+      setEmailPassword('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message
+        : err && typeof err === 'object' && 'message' in err ? String((err as Record<string, unknown>).message)
+        : 'Failed to change email';
+      setEmailError(msg);
+    } finally {
+      setChangingEmail(false);
     }
   };
 
@@ -203,10 +251,125 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
               <input type="text" defaultValue={user?.displayName ?? 'You'} style={s.input} />
             </div>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={s.label}>Email</label>
-              <input type="email" defaultValue={user?.email ?? ''} style={s.input} />
-            </div>
+            {/* Email — hidden for Google sign-in users, editable for password users */}
+            {user?.hasPassword !== false && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={s.label}>Email</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="email"
+                    value={user?.email ?? ''}
+                    readOnly
+                    style={{ ...s.input, flex: 1, opacity: 0.7, cursor: 'default' }}
+                  />
+                  {!showChangeEmail && (
+                    <button
+                      onClick={() => setShowChangeEmail(true)}
+                      style={{
+                        padding: '12px 16px', background: 'transparent',
+                        border: '1px solid #444', borderRadius: 6,
+                        color: '#ccc', cursor: 'pointer', fontFamily: 'inherit',
+                        fontSize: 13, whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Change
+                    </button>
+                  )}
+                </div>
+
+                {showChangeEmail && (
+                  <div style={{
+                    background: 'rgba(102,126,234,0.04)',
+                    border: '1px solid rgba(102,126,234,0.15)',
+                    borderRadius: 8, padding: 16, marginTop: 10,
+                  }}>
+                    <p style={{ color: '#aaa', fontSize: 13, marginBottom: 12 }}>
+                      A verification email will be sent to the new address. The change takes effect once you click the link.
+                    </p>
+                    <input
+                      type="email"
+                      placeholder="New email address"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      style={{ ...s.input, fontSize: 13, marginBottom: 8 }}
+                    />
+                    <div style={{ position: 'relative', marginBottom: 8 }}>
+                      <input
+                        type={showEmailPw ? 'text' : 'password'}
+                        placeholder="Current password"
+                        value={emailPassword}
+                        onChange={(e) => setEmailPassword(e.target.value)}
+                        autoComplete="new-password"
+                        data-1p-ignore="true"
+                        data-lpignore="true"
+                        style={{ ...s.input, fontSize: 13, padding: '10px 38px 10px 10px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailPw(!showEmailPw)}
+                        style={{
+                          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                          background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                        }}
+                        tabIndex={-1}
+                      >
+                        {showEmailPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+
+                    {emailError && (
+                      <p style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 8 }}>{emailError}</p>
+                    )}
+                    {emailSuccess && (
+                      <p style={{ color: '#4ade80', fontSize: 12, marginBottom: 8 }}>{emailSuccess}</p>
+                    )}
+                    {emailDevLink && (
+                      <a
+                        href={emailDevLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: '#667eea', fontSize: 12, display: 'block', marginBottom: 8, wordBreak: 'break-all' }}
+                      >
+                        Dev: Open confirmation link →
+                      </a>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => {
+                          setShowChangeEmail(false);
+                          setNewEmail('');
+                          setEmailPassword('');
+                          setEmailError('');
+                          setEmailSuccess('');
+                          setEmailDevLink('');
+                        }}
+                        style={{
+                          flex: 1, padding: 10, background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid #333', borderRadius: 6, color: '#aaa',
+                          cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleChangeEmail}
+                        disabled={changingEmail}
+                        style={{
+                          flex: 1, padding: 10,
+                          background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                          border: 'none', borderRadius: 6,
+                          color: '#fff', cursor: changingEmail ? 'wait' : 'pointer',
+                          fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                        }}
+                      >
+                        {changingEmail ? 'Sending...' : 'Send Verification'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div style={{ marginBottom: 20 }}>
               <label style={s.label}>Timezone</label>

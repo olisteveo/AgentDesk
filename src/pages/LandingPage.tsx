@@ -1,7 +1,7 @@
 /**
  * LandingPage — public marketing page for Agent Desk.
  *
- * Sections: Nav · Hero · Features · How-it-works · Preview · CTA · Footer
+ * Sections: Nav · Hero · Features · Governance · How-it-works · Preview · CTA · Footer
  * If the user is already authenticated the nav shows "Open Office" instead
  * of Sign-In / Get-Started.
  */
@@ -13,10 +13,15 @@ import {
   BarChart3,
   ClipboardCheck,
   MessagesSquare,
+  Shield,
+  Sparkles,
+  Layout,
+  Map,
   Users,
   Plug,
   ListTodo,
   TrendingUp,
+  BookOpen,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import './landing.css';
@@ -30,11 +35,6 @@ const FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
     desc: 'Connect OpenAI, Anthropic, Google Gemini and more — each desk can run a different model with its own API key.',
   },
   {
-    icon: BarChart3,
-    title: 'Real-Time Cost Tracking',
-    desc: 'Monitor spend per desk, per user, per model. Set budget limits and get alerts before you overshoot.',
-  },
-  {
     icon: ClipboardCheck,
     title: 'Task Management',
     desc: 'Assign tasks to AI agents, set priorities, and watch them execute in real-time from your virtual office.',
@@ -44,28 +44,58 @@ const FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
     title: 'Meeting Room',
     desc: 'Bring multiple AI agents together in one conversation. Upload files for shared context and let them collaborate.',
   },
+  {
+    icon: BarChart3,
+    title: 'Real-Time Cost Tracking',
+    desc: 'Monitor spend per desk, per user, per model. Set budget limits and get alerts before you overshoot.',
+  },
+  {
+    icon: Shield,
+    title: 'Core Rules & Governance',
+    desc: 'Choose a rules preset during onboarding that shapes all agent behaviour — from tone to output format. Your culture, built in.',
+  },
+  {
+    icon: Sparkles,
+    title: 'AI-Suggested Rules',
+    desc: 'After completing tasks, agents can suggest new rules to improve future work. Review, approve, or reject from the dashboard.',
+  },
+  {
+    icon: Layout,
+    title: 'Custom Rules Dashboard',
+    desc: 'Create team-wide and per-agent rules on top of your core preset. Toggle, categorise, and reorder to fine-tune agent behaviour.',
+  },
+  {
+    icon: Map,
+    title: 'Strategy Whiteboard',
+    desc: 'A shared canvas for vision, goals, plans, ideas, and memos. Keep your AI team aligned with real-time sticky notes.',
+  },
 ];
 
 const STEPS: { icon: LucideIcon; title: string; desc: string }[] = [
   {
     icon: Users,
     title: 'Create Your Team',
-    desc: 'Sign up in seconds and invite your teammates. Each team gets its own private virtual office.',
+    desc: 'Sign up in seconds and invite your teammates. Each team gets its own private virtual office with desks, agents, and a meeting room.',
+  },
+  {
+    icon: BookOpen,
+    title: 'Pick Your Core Rules',
+    desc: 'During onboarding, choose a rules preset that defines how all your agents communicate and work — startup speed, professional polish, creative flair, and more.',
   },
   {
     icon: Plug,
     title: 'Connect AI Models',
-    desc: 'Add API keys for the providers you use — OpenAI, Anthropic, Google — and assign models to desks.',
+    desc: 'Add API keys for the providers you use — OpenAI, Anthropic, Google — and assign models to desks. Mix and match freely.',
   },
   {
     icon: ListTodo,
-    title: 'Assign Tasks to Agents',
-    desc: 'Give your AI agents work to do. Set priorities, deadlines, and context — then let them get to it.',
+    title: 'Assign Tasks & Collaborate',
+    desc: 'Give your agents work, chat with them one-on-one, or bring them into meetings together. Set priorities, upload context, and let them get to it.',
   },
   {
     icon: TrendingUp,
-    title: 'Track & Optimise',
-    desc: 'Use the cost dashboard and usage analytics to keep spending in check and optimise model choices.',
+    title: 'Track, Govern & Optimise',
+    desc: 'Use the cost dashboard to monitor spending, the rules dashboard to refine agent behaviour, and the whiteboard to keep your strategy in sync.',
   },
 ];
 
@@ -121,8 +151,8 @@ export function LandingPage() {
           <span className="landing-hero-accent">Visualised</span>
         </h1>
         <p className="landing-hero-subtitle">
-          A virtual office for your AI agents. Assign tasks, track costs,
-          and collaborate across models — all in one place.
+          A virtual office for your AI agents. Assign tasks, set behavioural rules,
+          track costs, and collaborate across models — all in one place.
         </p>
         <div className="landing-hero-cta">
           {isAuthenticated ? (
@@ -152,7 +182,7 @@ export function LandingPage() {
       <section className="landing-section">
         <h2 className="landing-section-title">Everything You Need</h2>
         <p className="landing-section-subtitle">
-          Powerful tools to manage your AI workforce
+          Powerful tools to manage, govern, and collaborate with your AI workforce
         </p>
 
         <div className="landing-features-grid">
@@ -165,6 +195,48 @@ export function LandingPage() {
               <p className="landing-feature-desc">{f.desc}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── Governance highlight ──────────────────────── */}
+      <section className="landing-section landing-governance">
+        <h2 className="landing-section-title">Agent Governance, Built In</h2>
+        <p className="landing-section-subtitle">
+          Shape how every agent thinks, writes, and works — without touching a prompt
+        </p>
+
+        <div className="landing-governance-grid">
+          <div className="landing-governance-card">
+            <div className="landing-governance-icon">
+              <Shield size={20} strokeWidth={1.8} />
+            </div>
+            <h3>Core Rules Presets</h3>
+            <p>
+              Pick a behavioural foundation during onboarding. Five presets cover startup speed,
+              professional polish, creative expression, technical precision, and customer empathy.
+              Every agent inherits these rules automatically.
+            </p>
+          </div>
+          <div className="landing-governance-card">
+            <div className="landing-governance-icon">
+              <Layout size={20} strokeWidth={1.8} />
+            </div>
+            <h3>Custom Rules Layer</h3>
+            <p>
+              Add team-wide rules that apply to everyone, or per-desk rules that fine-tune
+              individual agents. Toggle them on and off, categorise by type, and reorder by priority.
+            </p>
+          </div>
+          <div className="landing-governance-card">
+            <div className="landing-governance-icon">
+              <Sparkles size={20} strokeWidth={1.8} />
+            </div>
+            <h3>AI Suggestions</h3>
+            <p>
+              After completing tasks, agents can propose new rules based on what they learned.
+              Review suggestions in the dashboard and approve, edit, or reject with one click.
+            </p>
+          </div>
         </div>
       </section>
 

@@ -5,15 +5,18 @@
  */
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { resendVerification } from '../api/auth';
 import './auth.css';
 
 export function VerifyEmailWaitPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
+  const navigate = useNavigate();
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [checking, setChecking] = useState(false);
 
   const handleResend = async () => {
     setSending(true);
@@ -26,6 +29,24 @@ export function VerifyEmailWaitPage() {
       setError('Failed to resend. Please try again.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    setChecking(true);
+    setError('');
+    try {
+      await refreshUser();
+      // refreshUser updates the auth state from the server.
+      // If emailVerified is now true, ProtectedRoute / the next
+      // render will redirect to /select-plan or /office automatically.
+      // Give React a tick to re-render before we navigate.
+      setTimeout(() => {
+        navigate('/office');
+      }, 50);
+    } catch {
+      setError('Could not check verification status. Please try again.');
+      setChecking(false);
     }
   };
 
@@ -66,7 +87,8 @@ export function VerifyEmailWaitPage() {
         </button>
 
         <button
-          onClick={() => window.location.reload()}
+          onClick={handleCheckVerification}
+          disabled={checking}
           style={{
             width: '100%',
             padding: '12px',
@@ -78,7 +100,7 @@ export function VerifyEmailWaitPage() {
             marginBottom: 12,
           }}
         >
-          I've Verified — Let Me In
+          {checking ? 'Checking…' : "I've Verified — Let Me In"}
         </button>
 
         <button

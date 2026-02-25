@@ -23,13 +23,22 @@ import {
 } from '../utils/sprites';
 import MeetingRoom from './MeetingRoom';
 import CostDashboard from './CostDashboard';
-import { ClipboardList, DollarSign, X, Trash2, Rss, Download } from 'lucide-react';
+import { ClipboardList, DollarSign, X, Trash2, Rss, Download, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { downloadCodeBlock, downloadAsMarkdown } from '../utils/download';
 import { friendlyError } from '../utils/friendlyErrors';
 import UpgradePrompt from './modals/UpgradePrompt';
+import RulesDashboard from './modals/RulesDashboard';
+import { listRules } from '../api/rules';
+import { CORE_RULES_PRESETS } from '../utils/coreRulesPresets';
 import type { PlanTier } from '../utils/tierConfig';
 
 // Meeting types moved to MeetingRoom.tsx
+
+// Icon map for core rules presets (Lucide icon name → component)
+const PRESET_ICONS: Record<string, LucideIcon> = {
+  Rocket, Briefcase, Palette, Settings, MessageCircle,
+};
 
 // Use shared constants — single source of truth
 import { MODEL_PRICING, AVAILABLE_MODELS } from '../utils/constants';
@@ -117,10 +126,12 @@ const OfficeCanvas: React.FC = () => {
 
   // Onboarding state — restore from auth context if already completed
   const [onboardingDone, setOnboardingDone] = useState(user?.onboardingDone ?? false);
+  const [onboardingStep, setOnboardingStep] = useState<1 | 2>(1);
   const [ceoName, setCeoName] = useState(user?.displayName ?? 'You');
   const [ceoSprite, setCeoSprite] = useState<'avatar1' | 'avatar2' | 'avatar3'>(
     (user?.avatarId as 'avatar1' | 'avatar2' | 'avatar3') ?? 'avatar1'
   );
+  const [selectedCorePreset, setSelectedCorePreset] = useState<string>('professional');
 
   // Desk configuration state
   const [desks, setDesks] = useState<Zone[]>(DEFAULT_DESKS);
@@ -158,9 +169,15 @@ const OfficeCanvas: React.FC = () => {
     plans: [],
     ideas: [],
     memos: [],
-    rules: []
   });
   const [newNote, setNewNote] = useState('');
+
+  // Rules dashboard state
+  const [showRulesDashboard, setShowRulesDashboard] = useState(false);
+  const [rulesCount, setRulesCount] = useState(0);
+  const [rulesPreview, setRulesPreview] = useState<string[]>([]);
+  const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0);
+  const [corePresetName, setCorePresetName] = useState<string | null>(null);
 
   // Upgrade prompt state (shown when user hits a tier limit)
   const [upgradePrompt, setUpgradePrompt] = useState<{
@@ -289,6 +306,25 @@ const OfficeCanvas: React.FC = () => {
     };
 
     loadDesks();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardingDone]);
+
+  // ── Rules summary (for sidebar panel) ──────────────────────
+
+  const loadRulesSummary = useCallback(async () => {
+    try {
+      const result = await listRules();
+      const activeTeam = result.team.filter(r => r.status === 'active');
+      const activeDesk = Object.values(result.desk).flat().filter(r => r.status === 'active');
+      setRulesCount(activeTeam.length + activeDesk.length);
+      setRulesPreview(activeTeam.slice(0, 3).map(r => r.title));
+      setPendingSuggestionsCount(result.pending.length);
+      setCorePresetName(result.corePreset?.name ?? null);
+    } catch { /* ignore on initial load */ }
+  }, []);
+
+  useEffect(() => {
+    if (onboardingDone) loadRulesSummary();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingDone]);
 
@@ -547,6 +583,9 @@ const OfficeCanvas: React.FC = () => {
 
       // Store the AI result for display
       setTaskResults(prev => ({ ...prev, [localTask.id]: result.result }));
+
+      // Refresh rules summary after a delay (AI may suggest new rules after task completion)
+      setTimeout(() => loadRulesSummary(), 6000);
 
       // Walk agent to CEO desk to report back
       const ceoZone = zones.ceo;
@@ -1180,10 +1219,10 @@ const OfficeCanvas: React.FC = () => {
     ));
     setOnboardingDone(true);
 
-    // Persist to backend + auth context
+    // Persist to backend + auth context (including core rules preset)
     try {
       const { completeOnboarding } = await import('../api/auth');
-      await completeOnboarding(name, ceoSprite);
+      await completeOnboarding(name, ceoSprite, selectedCorePreset);
       markOnboardingDone(name, ceoSprite);
     } catch (err) {
       console.error('Failed to save onboarding:', err);
@@ -1243,62 +1282,130 @@ const OfficeCanvas: React.FC = () => {
         </div>
       )}
 
-      {/* Onboarding Modal */}
+      {/* Onboarding Modal — 2-step flow */}
       {!onboardingDone && (
         <div className="onboarding-overlay">
-          <div className="onboarding-modal">
-            <img
-              className="onboarding-logo"
-              src="/assets/office-logo.png"
-              alt="Agent Desk"
-              width={140}
-              height={130}
-            />
-            <h1>Welcome to Agent Desk</h1>
-            <p className="onboarding-subtitle">Your AI-powered virtual office</p>
-
-            <div className="onboarding-section">
-              <label>What should we call you?</label>
-              <input
-                type="text"
-                className="onboarding-input"
-                value={ceoName}
-                onChange={e => setCeoName(e.target.value)}
-                placeholder="Your name"
-                maxLength={24}
-                autoFocus
-              />
+          <div className={`onboarding-modal${onboardingStep === 2 ? ' wide' : ''}`}>
+            {/* Step indicator */}
+            <div className="onboarding-steps">
+              <div className={`step-dot${onboardingStep >= 1 ? ' active' : ''}`} />
+              <div className="step-line" />
+              <div className={`step-dot${onboardingStep >= 2 ? ' active' : ''}`} />
             </div>
 
-            <div className="onboarding-section">
-              <label>Pick your character</label>
-              <div className="sprite-picker">
-                {(['avatar1', 'avatar2', 'avatar3'] as const).map((key, i) => (
+            {onboardingStep === 1 ? (
+              <>
+                <img
+                  className="onboarding-logo"
+                  src="/assets/office-logo.png"
+                  alt="Agent Desk"
+                  width={140}
+                  height={130}
+                />
+                <h1>Welcome to Agent Desk</h1>
+                <p className="onboarding-subtitle">Your AI-powered virtual office</p>
+
+                <div className="onboarding-section">
+                  <label>What should we call you?</label>
+                  <input
+                    type="text"
+                    className="onboarding-input"
+                    value={ceoName}
+                    onChange={e => setCeoName(e.target.value)}
+                    placeholder="Your name"
+                    maxLength={24}
+                    autoFocus
+                  />
+                </div>
+
+                <div className="onboarding-section">
+                  <label>Pick your character</label>
+                  <div className="sprite-picker">
+                    {(['avatar1', 'avatar2', 'avatar3'] as const).map((key, i) => (
+                      <button
+                        key={key}
+                        className={`sprite-option${ceoSprite === key ? ' selected' : ''}`}
+                        onClick={() => setCeoSprite(key)}
+                        title={`Character ${i + 1}`}
+                      >
+                        <img
+                          src={`/assets/avatar-0${i + 1}.png`}
+                          alt={`Character ${i + 1}`}
+                          width={72}
+                          height={72}
+                          style={{ imageRendering: 'pixelated' }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  className="onboarding-enter-btn"
+                  onClick={() => setOnboardingStep(2)}
+                  disabled={!ceoName.trim()}
+                >
+                  Next — Set Core Rules →
+                </button>
+              </>
+            ) : (
+              <>
+                <h1 style={{ fontSize: 22 }}>Set Your Core Rules</h1>
+                <p className="onboarding-subtitle">
+                  Choose how your AI agents communicate and work. This shapes every response.
+                </p>
+
+                <div className="core-preset-grid">
+                  {CORE_RULES_PRESETS.map(preset => {
+                    const Icon = PRESET_ICONS[preset.iconName];
+                    return (
+                      <button
+                        key={preset.id}
+                        className={`core-preset-card${selectedCorePreset === preset.id ? ' selected' : ''}`}
+                        onClick={() => setSelectedCorePreset(preset.id)}
+                      >
+                        <div className="core-preset-header">
+                          <div className="core-preset-icon-wrap">
+                            {Icon && <Icon size={18} strokeWidth={1.8} />}
+                          </div>
+                          <span className="core-preset-name">{preset.name}</span>
+                        </div>
+                        <p className="core-preset-desc">{preset.description}</p>
+                        <ul className="core-preset-rules">
+                          {preset.rules.map((rule, i) => (
+                            <li key={i}>{rule.title}</li>
+                          ))}
+                        </ul>
+                      </button>
+                    );
+                  })}
+                  <div className="core-preset-hint-card">
+                    <div className="core-preset-hint-icon">
+                      <Sparkles size={16} strokeWidth={1.8} />
+                    </div>
+                    <p>
+                      You can change your core rules anytime and create your own global or per-agent rules once inside the office. Core rules set the foundation — custom rules let you fine-tune.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="onboarding-nav">
                   <button
-                    key={key}
-                    className={`sprite-option${ceoSprite === key ? ' selected' : ''}`}
-                    onClick={() => setCeoSprite(key)}
-                    title={`Character ${i + 1}`}
+                    className="onboarding-back-btn"
+                    onClick={() => setOnboardingStep(1)}
                   >
-                    <img
-                      src={`/assets/avatar-0${i + 1}.png`}
-                      alt={`Character ${i + 1}`}
-                      width={72}
-                      height={72}
-                      style={{ imageRendering: 'pixelated' }}
-                    />
+                    ← Back
                   </button>
-                ))}
-              </div>
-            </div>
-
-            <button
-              className="onboarding-enter-btn"
-              onClick={handleOnboardingComplete}
-              disabled={!ceoName.trim()}
-            >
-              Enter the Office →
-            </button>
+                  <button
+                    className="onboarding-enter-btn"
+                    onClick={handleOnboardingComplete}
+                    disabled={!selectedCorePreset}
+                  >
+                    Enter the Office →
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1476,19 +1583,31 @@ const OfficeCanvas: React.FC = () => {
           </div>
         </div>
 
-        <div className="rules-panel" onClick={() => { setActiveTab('rules'); setShowWhiteboard(true); }}>
-          <h3>Rules</h3>
-          <div className="rules-count">{whiteboardNotes.rules?.length || 0} active</div>
+        <div className="rules-panel" onClick={() => setShowRulesDashboard(true)}>
+          <h3>
+            Rules
+            {pendingSuggestionsCount > 0 && (
+              <span style={{ background: '#ff6b6b', color: '#fff', fontSize: 9, padding: '1px 5px', borderRadius: 8, marginLeft: 6, verticalAlign: 'middle' }}>
+                {pendingSuggestionsCount}
+              </span>
+            )}
+          </h3>
+          {corePresetName && (
+            <div style={{ fontSize: 10, color: '#667eea', marginBottom: 6, fontWeight: 600 }}>
+              Core: {corePresetName}
+            </div>
+          )}
+          <div className="rules-count">{rulesCount} custom active</div>
           <div className="rules-preview">
-            {whiteboardNotes.rules?.slice(0, 3).map((rule, i) => (
-              <div key={i} className="rule-item">• {rule.substring(0, 40)}{rule.length > 40 ? '...' : ''}</div>
+            {rulesPreview.slice(0, 3).map((title, i) => (
+              <div key={i} className="rule-item">• {title.substring(0, 40)}{title.length > 40 ? '...' : ''}</div>
             ))}
-            {(!whiteboardNotes.rules || whiteboardNotes.rules.length === 0) && (
-              <div className="rule-item empty">No rules set</div>
+            {rulesPreview.length === 0 && rulesCount === 0 && (
+              <div className="rule-item empty">No custom rules</div>
             )}
           </div>
           <div style={{ marginTop: '8px', fontSize: '10px', color: '#888', textAlign: 'center' }}>
-            Click to edit
+            Click to manage
           </div>
         </div>
       </div>
@@ -1836,7 +1955,7 @@ const OfficeCanvas: React.FC = () => {
             
             {/* Tabs */}
             <div className="whiteboard-tabs">
-              {['vision', 'goals', 'plans', 'ideas', 'memos', 'rules', 'history'].map(tab => (
+              {['vision', 'goals', 'plans', 'ideas', 'memos', 'history'].map(tab => (
                 <button
                   key={tab}
                   className={`tab ${activeTab === tab ? 'active' : ''}`}
@@ -1849,7 +1968,7 @@ const OfficeCanvas: React.FC = () => {
                 </button>
               ))}
             </div>
-            
+
             <div className="whiteboard-canvas">
               {activeTab === 'history' ? (
                 <div className="session-history-panel">
@@ -1956,6 +2075,19 @@ const OfficeCanvas: React.FC = () => {
         isOpen={showAccountSettings}
         onClose={() => { setShowAccountSettings(false); setSettingsTab('account'); }}
         initialTab={settingsTab}
+      />
+
+      <RulesDashboard
+        show={showRulesDashboard}
+        onClose={() => { setShowRulesDashboard(false); loadRulesSummary(); }}
+        desks={deskAssignments.map(a => {
+          const agent = agents.find(ag => ag.zone === a.deskId);
+          return {
+            id: a.backendDeskId || a.deskId,
+            name: a.customName || a.deskId,
+            agentName: agent?.name || 'Agent',
+          };
+        })}
       />
 
       {/* Office Footer */}

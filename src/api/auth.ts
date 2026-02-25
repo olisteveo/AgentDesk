@@ -115,10 +115,11 @@ export function selectPlan(
 export function completeOnboarding(
   displayName: string,
   avatarId: string,
-): Promise<{ message: string; displayName: string; avatarId: string }> {
+  coreRulesPreset?: string,
+): Promise<{ message: string; displayName: string; avatarId: string; coreRulesPreset: string | null }> {
   return apiRequest('/api/auth/onboarding', {
     method: 'PATCH',
-    body: JSON.stringify({ displayName, avatarId }),
+    body: JSON.stringify({ displayName, avatarId, coreRulesPreset }),
   });
 }
 
@@ -137,4 +138,31 @@ export function changePassword(
     method: 'POST',
     body: JSON.stringify({ currentPassword, newPassword }),
   });
+}
+
+export function changeEmail(
+  newEmail: string,
+  password: string,
+): Promise<{ message: string; _dev_emailPreview?: string }> {
+  return apiRequest('/api/auth/change-email', {
+    method: 'POST',
+    body: JSON.stringify({ newEmail, password }),
+  });
+}
+
+export function confirmEmailChange(
+  token: string,
+): Promise<{ message: string; email: string }> {
+  return apiRequest('/api/auth/confirm-email-change', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Fetch current user profile fresh from the DB (refreshes stale localStorage). */
+export function fetchMe(): Promise<{
+  user: AuthUser;
+  team: AuthTeam;
+}> {
+  return apiRequest('/api/auth/me');
 }

@@ -18,6 +18,7 @@ export interface TierLimitConfig {
   meetingRoom: boolean;
   avatarSlots: number;
   workflowTemplates: number;     // 0 = linear only, -1 = unlimited
+  maxRules: number;              // max active + disabled rules per team
 }
 
 export const TIER_LIMITS: Record<PlanTier, TierLimitConfig> = {
@@ -32,6 +33,7 @@ export const TIER_LIMITS: Record<PlanTier, TierLimitConfig> = {
     meetingRoom: true,
     avatarSlots: 3,
     workflowTemplates: 0,
+    maxRules: 10,
   },
   pro: {
     maxDesks: 6,
@@ -44,6 +46,7 @@ export const TIER_LIMITS: Record<PlanTier, TierLimitConfig> = {
     meetingRoom: true,
     avatarSlots: 6,
     workflowTemplates: 3,
+    maxRules: 50,
   },
   enterprise: {
     maxDesks: 20,
@@ -56,6 +59,7 @@ export const TIER_LIMITS: Record<PlanTier, TierLimitConfig> = {
     meetingRoom: true,
     avatarSlots: 12,
     workflowTemplates: -1,
+    maxRules: 999,
   },
 };
 
@@ -101,6 +105,7 @@ export function upgradeMessage(limitType: string, plan: PlanTier): string {
     providers: `Need more providers? Upgrade to ${nextLabel} ($${nextPrice}/mo) for up to ${TIER_LIMITS[next].maxProviders} providers.`,
     concurrentTasks: `Want to run more tasks at once? Upgrade to ${nextLabel} ($${nextPrice}/mo) for up to ${TIER_LIMITS[next].maxConcurrentTasks} concurrent tasks.`,
     whiteboardTabs: `Need more whiteboard tabs? Upgrade to ${nextLabel} ($${nextPrice}/mo) for up to ${TIER_LIMITS[next].maxWhiteboardTabs} tabs.`,
+    rules: `Need more rules? Upgrade to ${nextLabel} ($${nextPrice}/mo) for up to ${TIER_LIMITS[next].maxRules} rules.`,
     costHistory: `Want longer cost history? Upgrade to ${nextLabel} ($${nextPrice}/mo) for ${TIER_LIMITS[next].costHistoryDays === -1 ? 'unlimited' : TIER_LIMITS[next].costHistoryDays + ' days'} of history.`,
   };
 

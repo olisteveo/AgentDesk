@@ -224,6 +224,61 @@
   margin: 0;
 }
 
+/* ── Governance highlight ────────────────────────────────── */
+
+.landing-governance {
+  padding-bottom: 60px;
+}
+
+.landing-governance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.landing-governance-card {
+  background: rgba(102, 126, 234, 0.04);
+  border: 1px solid rgba(102, 126, 234, 0.15);
+  border-radius: 16px;
+  padding: 28px 24px;
+  transition: border-color 0.3s, transform 0.3s;
+}
+
+.landing-governance-card:hover {
+  border-color: rgba(102, 126, 234, 0.4);
+  transform: translateY(-3px);
+}
+
+.landing-governance-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.1));
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: #8b9cf7;
+  box-shadow:
+    0 4px 12px rgba(102, 126, 234, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.landing-governance-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.landing-governance-card p {
+  font-size: 13px;
+  color: #999;
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* ── How it works ────────────────────────────────────────── */
 
 .landing-steps {
@@ -393,6 +448,10 @@
   }
 
   .landing-features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-governance-grid {
     grid-template-columns: 1fr;
   }
 

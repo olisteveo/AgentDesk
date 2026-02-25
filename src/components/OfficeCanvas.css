@@ -1133,6 +1133,207 @@
   cursor: not-allowed;
 }
 
+/* ── Onboarding Step 2: Core Rules ───────────────────────── */
+
+.onboarding-modal.wide {
+  max-width: 720px;
+  padding: 32px 36px;
+}
+
+.onboarding-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 24px;
+}
+
+.step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease;
+}
+
+.step-dot.active {
+  background: #667eea;
+  box-shadow: 0 0 8px rgba(102, 126, 234, 0.5);
+}
+
+.step-line {
+  width: 40px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.core-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 8px 0 20px 0;
+  text-align: left;
+}
+
+.core-preset-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  color: #ccc;
+}
+
+.core-preset-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+.core-preset-card.selected {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.core-preset-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.core-preset-icon-wrap {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.1));
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b9cf7;
+  box-shadow:
+    0 4px 12px rgba(102, 126, 234, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.core-preset-card.selected .core-preset-icon-wrap {
+  border-color: rgba(102, 126, 234, 0.45);
+  color: #a5b4fc;
+  box-shadow:
+    0 4px 16px rgba(102, 126, 234, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.core-preset-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.core-preset-desc {
+  font-size: 11px;
+  color: #888;
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+}
+
+.core-preset-rules {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.core-preset-rules li {
+  font-size: 11px;
+  color: #aaa;
+  padding: 3px 0;
+  padding-left: 14px;
+  position: relative;
+  line-height: 1.3;
+}
+
+.core-preset-rules li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #667eea;
+}
+
+.core-preset-card.selected .core-preset-rules li::before {
+  color: #a78bfa;
+}
+
+/* Hint card — fills the 6th grid slot */
+.core-preset-hint-card {
+  background: rgba(102, 126, 234, 0.04);
+  border: 1px dashed rgba(102, 126, 234, 0.2);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.core-preset-hint-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12), rgba(118, 75, 162, 0.08));
+  border: 1px solid rgba(102, 126, 234, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #667eea;
+}
+
+.core-preset-hint-card p {
+  font-size: 11px;
+  color: #777;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.onboarding-nav {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.onboarding-back-btn {
+  padding: 15px 24px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: #aaa;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.onboarding-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.onboarding-nav .onboarding-enter-btn {
+  flex: 1;
+}
+
 /* ── Canvas Hover Tooltip ────────────────────────────────── */
 .canvas-tooltip {
   position: fixed;

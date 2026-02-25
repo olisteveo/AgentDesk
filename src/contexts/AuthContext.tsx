@@ -56,6 +56,8 @@ interface AuthContextValue {
   markEmailVerified: () => void;
   markOnboardingDone: (displayName: string, avatarId: string) => void;
   updateUser: (partial: Partial<AuthUser>) => void;
+  /** Re-fetch the user's profile from the server and update local state. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -160,6 +162,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const res = await authApi.fetchMe();
+    const userData: AuthUser = {
+      id: res.user.id,
+      email: res.user.email,
+      displayName: res.user.displayName,
+      role: res.user.role,
+      teamId: res.team.id,
+      teamName: res.team.name,
+      plan: res.team.plan ?? 'free',
+      emailVerified: res.user.emailVerified ?? true,
+      planSelected: res.user.planSelected ?? true,
+      onboardingDone: res.user.onboardingDone ?? false,
+      avatarId: res.user.avatarId ?? 'avatar1',
+      hasPassword: res.user.hasPassword ?? true,
+    };
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
@@ -184,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         markEmailVerified,
         markOnboardingDone,
         updateUser,
+        refreshUser,
       }}
     >
       {children}
