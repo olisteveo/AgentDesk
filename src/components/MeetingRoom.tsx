@@ -1,10 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { listMeetings, startMeetingApi, askInMeeting, endMeetingApi, reactivateMeeting, getMeeting } from '../api/meetings';
+import { listMeetings, startMeetingApi, askInMeeting, endMeetingApi, reactivateMeeting, getMeeting, deleteMeeting, clearAllMeetings } from '../api/meetings';
 import type { MeetingRow } from '../api/meetings';
 import { sendChat } from '../api/chat';
 import { createDesk } from '../api/desks';
 import type { DeskAssignment } from '../types';
-import { Calendar, Rocket, X, Send, CircleStop, History, RotateCcw, MessageSquare } from 'lucide-react';
+import { Calendar, Rocket, X, Send, CircleStop, History, RotateCcw, MessageSquare, Trash2 } from 'lucide-react';
 import { parseCodeBlocks } from '../utils/parseCodeBlocks';
 import { openCode } from '../api/tasks';
 import './MeetingRoom.css';
@@ -123,6 +123,24 @@ const MeetingRoom: React.FC<MeetingRoomProps> = ({
       // Silently fail -- history is non-critical
     } finally {
       setHistoryLoading(false);
+    }
+  }, []);
+
+  const handleDeleteMeeting = useCallback(async (meetingId: string) => {
+    try {
+      await deleteMeeting(meetingId);
+      setMeetingHistory(prev => prev.filter(m => m.id !== meetingId));
+    } catch {
+      // Silently fail
+    }
+  }, []);
+
+  const handleClearAll = useCallback(async () => {
+    try {
+      await clearAllMeetings();
+      setMeetingHistory([]);
+    } catch {
+      // Silently fail
     }
   }, []);
 
@@ -628,7 +646,14 @@ const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
             {showHistory ? (
               <div className="meeting-history-panel">
-                <h3>Past Meetings</h3>
+                <div className="history-panel-header">
+                  <h3>Past Meetings</h3>
+                  {meetingHistory.length > 0 && (
+                    <button className="history-clear-all-btn" onClick={handleClearAll}>
+                      <Trash2 size={12} style={{ marginRight: 4 }} />Clear All
+                    </button>
+                  )}
+                </div>
                 {historyLoading ? (
                   <div className="history-loading">Loading meetings...</div>
                 ) : meetingHistory.length === 0 ? (
@@ -653,6 +678,9 @@ const MeetingRoom: React.FC<MeetingRoomProps> = ({
                               <RotateCcw size={12} style={{ marginRight: 4 }} />Resume
                             </button>
                           )}
+                          <button className="history-delete-btn" onClick={() => handleDeleteMeeting(meeting.id)}>
+                            <Trash2 size={12} />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -679,6 +707,11 @@ const MeetingRoom: React.FC<MeetingRoomProps> = ({
                       const modelName = modelPricing[modelId]?.name || modelId;
                       return (
                         <label key={agent.id} className="participant-checkbox">
+                          <span className="participant-avatar">{agent.name.charAt(0).toUpperCase()}</span>
+                          <div className="participant-details">
+                            <span className="participant-name">{agent.name}</span>
+                            <span className="participant-model-label">{modelName}</span>
+                          </div>
                           <input
                             type="checkbox"
                             checked={selectedParticipants.includes(agent.id)}
@@ -690,11 +723,6 @@ const MeetingRoom: React.FC<MeetingRoomProps> = ({
                               }
                             }}
                           />
-                          <span className="participant-avatar">{agent.name.charAt(0).toUpperCase()}</span>
-                          <div className="participant-details">
-                            <span className="participant-name">{agent.name}</span>
-                            <span className="participant-model-label">{modelName}</span>
-                          </div>
                         </label>
                       );
                     })}
@@ -742,7 +770,59 @@ const MeetingRoom: React.FC<MeetingRoomProps> = ({
                         {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </span>
                     </div>
-                    <div className="transcript-text">{msg.content}</div>
+                    <div className="transcript-text">
+                      {(!msg.isUser && msg.content.includes('```'))
+                        ? parseCodeBlocks(msg.content).map((seg, si) =>
+                            seg.type === 'text' ? (
+                              <span key={si} style={{ whiteSpace: 'pre-wrap' }}>{seg.content}</span>
+                            ) : (
+                              <div key={si} className="code-block">
+                                <div className="code-block-header">
+                                  <span className="code-block-lang">{seg.language}</span>
+                                  <div className="code-block-actions">
+                                    <button className="code-block-copy" onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const btn = e.currentTarget;
+                                      try {
+                                        await navigator.clipboard.writeText(seg.content);
+                                        btn.textContent = 'Copied';
+                                        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+                                      } catch {
+                                        const ta = document.createElement('textarea');
+                                        ta.value = seg.content;
+                                        ta.style.position = 'fixed';
+                                        ta.style.opacity = '0';
+                                        document.body.appendChild(ta);
+                                        ta.select();
+                                        document.execCommand('copy');
+                                        document.body.removeChild(ta);
+                                        btn.textContent = 'Copied';
+                                        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+                                      }
+                                    }}>Copy</button>
+                                    <button className="code-block-open" onClick={async (e) => {
+                                      const btn = e.currentTarget;
+                                      try {
+                                        const { filePath } = await openCode(seg.content, seg.language);
+                                        window.location.href = `vscode://file${filePath}`;
+                                        btn.textContent = 'Sent to VS Code';
+                                        setTimeout(() => { btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.583 2.286l-4.574 4.596L7.722 2.67 2 5.39v13.202l5.704 2.737 5.307-4.212 4.572 4.597L24 18.58V5.402l-6.417-3.116zM7.7 15.094L4.709 12l2.99-3.094v6.188zm9.88 2.318l-4.496-3.624 4.496-3.624v7.248z"/></svg> VS Code'; }, 2000);
+                                      } catch { /* ignore */ }
+                                    }}>
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M17.583 2.286l-4.574 4.596L7.722 2.67 2 5.39v13.202l5.704 2.737 5.307-4.212 4.572 4.597L24 18.58V5.402l-6.417-3.116zM7.7 15.094L4.709 12l2.99-3.094v6.188zm9.88 2.318l-4.496-3.624 4.496-3.624v7.248z"/>
+                                      </svg>
+                                      VS Code
+                                    </button>
+                                  </div>
+                                </div>
+                                <pre><code>{seg.content}</code></pre>
+                              </div>
+                            )
+                          )
+                        : msg.content
+                      }
+                    </div>
                   </div>
                 ))
               )}

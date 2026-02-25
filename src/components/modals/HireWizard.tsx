@@ -5,10 +5,19 @@ import {
   validateKey,
   connectProvider,
   disconnectProvider,
+  testProvider,
   type ProviderConnection,
 } from '../../api/providers';
 import type { Zone } from '../../types';
 import './HireWizard.css';
+
+type DeskType = 'mini' | 'standard' | 'power';
+
+const DESK_OPTIONS: { key: DeskType; label: string; asset: string }[] = [
+  { key: 'mini',     label: 'Starter',  asset: '/assets/desk-mini.png' },
+  { key: 'standard', label: 'Standard', asset: '/assets/desk-standard.png' },
+  { key: 'power',    label: 'Executive', asset: '/assets/desk-boss.png' },
+];
 
 interface HireWizardProps {
   desks: Zone[];
@@ -18,6 +27,7 @@ interface HireWizardProps {
     agentName: string;
     avatar: 'avatar1' | 'avatar2' | 'avatar3';
     deskName: string;
+    deskType: DeskType;
   }) => void;
   onClose: () => void;
   onDeskRemoved: (deskId: string) => void;
@@ -47,6 +57,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
   const [validating, setValidating] = useState(false);
   const [validated, setValidated] = useState<boolean | null>(null);
   const [validationError, setValidationError] = useState('');
+  const [validationWarning, setValidationWarning] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Step 2
@@ -58,6 +69,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
 
   // Step 4
   const [deskName, setDeskName] = useState('');
+  const [deskType, setDeskType] = useState<DeskType>('mini');
 
   // Manage tab state
   const [manageProvider, setManageProvider] = useState('');
@@ -65,8 +77,12 @@ const HireWizard: React.FC<HireWizardProps> = ({
   const [manageValidating, setManageValidating] = useState(false);
   const [manageValidated, setManageValidated] = useState<boolean | null>(null);
   const [manageError, setManageError] = useState('');
+  const [manageWarning, setManageWarning] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+
+  // Track provider warnings persistently (provider -> warning message)
+  const [providerWarnings, setProviderWarnings] = useState<Record<string, string>>({});
 
   // Load connections from backend on mount
   useEffect(() => {
@@ -77,7 +93,20 @@ const HireWizard: React.FC<HireWizardProps> = ({
     setLoadingConnections(true);
     try {
       const result = await listProviders();
-      setConnections(result.filter(c => c.isConnected));
+      const active = result.filter(c => c.isConnected);
+      setConnections(active);
+
+      // Test each connection in the background to detect billing warnings
+      // This ensures yellow "Low Credits" badges show up even after page reload
+      for (const conn of active) {
+        testProvider(conn.id)
+          .then(testResult => {
+            if (testResult.warning) {
+              setProviderWarnings(prev => ({ ...prev, [conn.provider]: testResult.warning! }));
+            }
+          })
+          .catch(() => { /* ignore test failures */ });
+      }
     } catch {
       // Silently fail — user will see empty connections
     } finally {
@@ -92,12 +121,17 @@ const HireWizard: React.FC<HireWizardProps> = ({
     setValidating(true);
     setValidated(null);
     setValidationError('');
+    setValidationWarning('');
 
     try {
       const result = await validateKey(provider, apiKey);
       if (result.valid) {
         setValidated(true);
-        // Key is valid — save to backend
+        if (result.warning) {
+          setValidationWarning(result.warning);
+          setProviderWarnings(prev => ({ ...prev, [provider]: result.warning! }));
+        }
+        // Key is valid -- save to backend
         setSaving(true);
         const saved = await connectProvider(provider, apiKey);
         setConnections(prev => {
@@ -127,11 +161,16 @@ const HireWizard: React.FC<HireWizardProps> = ({
     setManageValidating(true);
     setManageValidated(null);
     setManageError('');
+    setManageWarning('');
 
     try {
       const result = await validateKey(manageProvider, manageApiKey);
       if (result.valid) {
         setManageValidated(true);
+        if (result.warning) {
+          setManageWarning(result.warning);
+          setProviderWarnings(prev => ({ ...prev, [manageProvider]: result.warning! }));
+        }
         setManageSaving(true);
         const saved = await connectProvider(manageProvider, manageApiKey);
         setConnections(prev => {
@@ -139,9 +178,13 @@ const HireWizard: React.FC<HireWizardProps> = ({
           return [...filtered, saved];
         });
         setManageApiKey('');
-        setManageProvider('');
         setManageSaving(false);
-        setManageValidated(null);
+        // Keep validation visible for 3 seconds so user sees the result
+        setTimeout(() => {
+          setManageValidated(null);
+          setManageWarning('');
+          setManageProvider('');
+        }, 3000);
       } else {
         setManageValidated(false);
         setManageError(result.error || 'Invalid API key');
@@ -182,7 +225,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
   }, [step, useExisting, selectedConnection, provider, apiKey, model, agentName]);
 
   const handleComplete = () => {
-    onComplete({ model, agentName, avatar, deskName });
+    onComplete({ model, agentName, avatar, deskName, deskType });
   };
 
   const nextDeskNum = desks.filter(d => d.id?.startsWith('desk')).length + 1;
@@ -203,24 +246,20 @@ const HireWizard: React.FC<HireWizardProps> = ({
 
   const handleNextFromStep1 = () => {
     if (useExisting && selectedConnection) {
-      // Using existing connection — just go to next step
+      setStep(2);
+    } else if (validated === true) {
+      // Already validated and saved -- move on
       setStep(2);
     } else if (provider && apiKey) {
-      // New key — validate + save first, then the step will advance after save
+      // New key -- validate + save first, user clicks Next again after
       handleValidateAndSave();
     }
   };
 
-  // After successful validation+save, auto-advance to step 2
-  useEffect(() => {
-    if (validated === true && !saving && step === 1) {
-      setStep(2);
-    }
-  }, [validated, saving, step]);
-
   return (
     <div className="hire-wizard-overlay" onClick={onClose}>
-      <div className="hire-wizard" onClick={e => e.stopPropagation()}>
+      <div className="hire-wizard" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+        <form autoComplete="off" onSubmit={e => e.preventDefault()} style={{ display: 'contents' }}>
         <div className="hire-wizard-header">
           <h2>{mode === 'hire' ? 'Hire Agent' : 'Manage'}</h2>
           <button className="close-btn" onClick={onClose}>x</button>
@@ -268,22 +307,35 @@ const HireWizard: React.FC<HireWizardProps> = ({
                   {connectedProviders.length > 0 && (
                     <div className="wizard-section">
                       <label className="wizard-label">Use existing connection:</label>
-                      {connectedProviders.map(conn => (
-                        <div key={conn.id}
-                          className={`wizard-card${useExisting && selectedConnection === conn.id ? ' selected' : ''}`}
-                          onClick={() => {
-                            setUseExisting(true);
-                            setSelectedConnection(conn.id);
-                            setProvider(conn.provider);
-                            setApiKey('');
-                            setValidated(null);
-                            setValidationError('');
-                          }}>
-                          <strong>{PROVIDERS_LIST.find(p => p.id === conn.provider)?.name || conn.provider}</strong>
-                          <span className="connected-badge">Connected</span>
-                          <div className="wizard-card-sub">{conn.apiKeyMasked}</div>
-                        </div>
-                      ))}
+                      {connectedProviders.map(conn => {
+                        const hasWarning = !!providerWarnings[conn.provider];
+                        return (
+                          <div key={conn.id}
+                            className={`wizard-card${useExisting && selectedConnection === conn.id ? ' selected' : ''}`}
+                            onClick={() => {
+                              setUseExisting(true);
+                              setSelectedConnection(conn.id);
+                              setProvider(conn.provider);
+                              setApiKey('');
+                              setValidated(null);
+                              setValidationError('');
+                              setValidationWarning('');
+                            }}>
+                            <strong>{PROVIDERS_LIST.find(p => p.id === conn.provider)?.name || conn.provider}</strong>
+                            {hasWarning ? (
+                              <span className="warning-badge">Low Credits</span>
+                            ) : (
+                              <span className="connected-badge">Connected</span>
+                            )}
+                            <div className="wizard-card-sub">{conn.apiKeyMasked}</div>
+                            {hasWarning && (
+                              <div className="provider-warning-msg">
+                                {providerWarnings[conn.provider]}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                       <div className="wizard-divider">-- or add a new provider --</div>
                     </div>
                   )}
@@ -307,6 +359,8 @@ const HireWizard: React.FC<HireWizardProps> = ({
 
                   {provider && !useExisting && (
                     <div className="wizard-api-key">
+                      {/* Hidden dummy field prevents Chrome password manager popup */}
+                      <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} tabIndex={-1} />
                       <input
                         type="password"
                         placeholder="Enter API Key..."
@@ -315,17 +369,26 @@ const HireWizard: React.FC<HireWizardProps> = ({
                           setApiKey(e.target.value);
                           setValidated(null);
                           setValidationError('');
+                          setValidationWarning('');
                         }}
                         className="wizard-input"
+                        autoComplete="new-password"
+                        data-1p-ignore="true"
+                        data-lpignore="true"
                         autoFocus
                       />
-                      {validated === true && (
-                        <div style={{ color: '#1dd1a1', fontSize: 12, marginTop: 6 }}>
+                      {validated === true && !validationWarning && (
+                        <div className="validation-status validation-success">
                           Key validated and saved securely.
                         </div>
                       )}
+                      {validated === true && validationWarning && (
+                        <div className="validation-status validation-warning">
+                          Key saved -- but: {validationWarning}
+                        </div>
+                      )}
                       {validated === false && (
-                        <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 6 }}>
+                        <div className="validation-status validation-error">
                           {validationError}
                         </div>
                       )}
@@ -395,7 +458,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
                 </div>
               )}
 
-              {/* Step 4: Desk Name + Summary */}
+              {/* Step 4: Desk Name + Desk Style + Summary */}
               {step === 4 && (
                 <div>
                   <div className="wizard-field">
@@ -409,6 +472,24 @@ const HireWizard: React.FC<HireWizardProps> = ({
                       maxLength={24}
                       autoFocus
                     />
+                  </div>
+                  <div className="wizard-field">
+                    <label className="wizard-label">Pick Desk Style</label>
+                    <div className="desk-picker">
+                      {DESK_OPTIONS.map(opt => (
+                        <button key={opt.key}
+                          type="button"
+                          className={`desk-option${deskType === opt.key ? ' selected' : ''}`}
+                          onClick={() => setDeskType(opt.key)}>
+                          <img
+                            src={opt.asset}
+                            alt={opt.label}
+                            style={{ imageRendering: 'pixelated', width: '100%', height: 'auto' }}
+                          />
+                          <span className="desk-option-label">{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="wizard-summary">
@@ -425,6 +506,9 @@ const HireWizard: React.FC<HireWizardProps> = ({
                       </div>
                       <div><span className="wizard-summary-label">Desk: </span>
                         <span className="wizard-summary-value">{deskName || `Desk ${nextDeskNum}`}</span>
+                      </div>
+                      <div><span className="wizard-summary-label">Style: </span>
+                        <span className="wizard-summary-value">{DESK_OPTIONS.find(o => o.key === deskType)?.label || 'Starter'}</span>
                       </div>
                     </div>
                   </div>
@@ -444,10 +528,10 @@ const HireWizard: React.FC<HireWizardProps> = ({
               <div>
                 {step === 1 ? (
                   <button
-                    className={`wizard-btn primary${!isStepValid ? ' disabled' : ''}`}
+                    className={`wizard-btn ${validated === true && !useExisting ? 'confirm' : 'primary'}${!isStepValid && validated !== true ? ' disabled' : ''}`}
                     onClick={handleNextFromStep1}
-                    disabled={!isStepValid || validating || saving}>
-                    {validating ? 'Validating...' : saving ? 'Saving...' : useExisting ? 'Next' : 'Validate & Next'}
+                    disabled={(!isStepValid && validated !== true) || validating || saving}>
+                    {validating ? 'Validating...' : saving ? 'Saving...' : validated === true && !useExisting ? 'Next' : useExisting ? 'Next' : 'Validate & Save'}
                   </button>
                 ) : step < 4 ? (
                   <button
@@ -482,27 +566,39 @@ const HireWizard: React.FC<HireWizardProps> = ({
                 <div className="manage-empty">No providers connected. Use the "Hire Agent" tab to get started.</div>
               )}
 
-              {connectedProviders.map(conn => (
-                <div key={conn.id} className="wizard-card" style={{ borderColor: '#1dd1a1' }}>
-                  <div className="wizard-card-row">
-                    <div>
-                      <strong>{PROVIDERS_LIST.find(p => p.id === conn.provider)?.name || conn.provider}</strong>
-                      <span className="connected-badge">Connected</span>
+              {connectedProviders.map(conn => {
+                const hasWarning = !!providerWarnings[conn.provider];
+                return (
+                  <div key={conn.id} className="wizard-card" style={{ borderColor: hasWarning ? '#feca57' : '#1dd1a1' }}>
+                    <div className="wizard-card-row">
+                      <div>
+                        <strong>{PROVIDERS_LIST.find(p => p.id === conn.provider)?.name || conn.provider}</strong>
+                        {hasWarning ? (
+                          <span className="warning-badge">Low Credits</span>
+                        ) : (
+                          <span className="connected-badge">Connected</span>
+                        )}
+                      </div>
+                      <button
+                        className="manage-disconnect-btn"
+                        onClick={() => handleDisconnect(conn.id)}
+                        disabled={disconnecting === conn.id}>
+                        {disconnecting === conn.id ? '...' : 'Disconnect'}
+                      </button>
                     </div>
-                    <button
-                      className="manage-disconnect-btn"
-                      onClick={() => handleDisconnect(conn.id)}
-                      disabled={disconnecting === conn.id}>
-                      {disconnecting === conn.id ? '...' : 'Disconnect'}
-                    </button>
+                    <div className="wizard-card-sub">Key: {conn.apiKeyMasked}</div>
+                    <div className="wizard-card-sub">
+                      Models: {PROVIDERS_LIST.find(p => p.id === conn.provider)?.models
+                        .map(m => AVAILABLE_MODELS.find(am => am.id === m)?.name || m).join(', ')}
+                    </div>
+                    {hasWarning && (
+                      <div className="provider-warning-msg">
+                        {providerWarnings[conn.provider]}
+                      </div>
+                    )}
                   </div>
-                  <div className="wizard-card-sub">Key: {conn.apiKeyMasked}</div>
-                  <div className="wizard-card-sub">
-                    Models: {PROVIDERS_LIST.find(p => p.id === conn.provider)?.models
-                      .map(m => AVAILABLE_MODELS.find(am => am.id === m)?.name || m).join(', ')}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
 
               {/* Add new provider inline */}
               {unconnectedProviders.length > 0 && (
@@ -527,6 +623,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
                   {manageProvider && (
                     <>
                       <div className="manage-provider-row" style={{ marginTop: '8px' }}>
+                        <input type="text" name="prevent-autofill-manage" autoComplete="off" style={{ display: 'none' }} tabIndex={-1} />
                         <input
                           type="password"
                           className="wizard-input"
@@ -537,6 +634,9 @@ const HireWizard: React.FC<HireWizardProps> = ({
                             setManageValidated(null);
                             setManageError('');
                           }}
+                          autoComplete="new-password"
+                          data-1p-ignore="true"
+                          data-lpignore="true"
                           style={{ flex: 1 }}
                         />
                         <button
@@ -547,13 +647,18 @@ const HireWizard: React.FC<HireWizardProps> = ({
                           {manageValidating ? 'Validating...' : manageSaving ? 'Saving...' : 'Connect'}
                         </button>
                       </div>
-                      {manageValidated === true && (
-                        <div style={{ color: '#1dd1a1', fontSize: 12, marginTop: 6 }}>
+                      {manageValidated === true && !manageWarning && (
+                        <div className="validation-status validation-success">
                           Connected successfully.
                         </div>
                       )}
+                      {manageValidated === true && manageWarning && (
+                        <div className="validation-status validation-warning">
+                          Connected -- but: {manageWarning}
+                        </div>
+                      )}
                       {manageValidated === false && (
-                        <div style={{ color: '#ff6b6b', fontSize: 12, marginTop: 6 }}>
+                        <div className="validation-status validation-error">
                           {manageError}
                         </div>
                       )}
@@ -596,6 +701,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
             </div>
           </div>
         )}
+        </form>
       </div>
     </div>
   );

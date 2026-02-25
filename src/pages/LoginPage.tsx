@@ -5,7 +5,7 @@
  * the user is already authenticated.
  */
 
-import { useState, useCallback, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
@@ -73,7 +73,7 @@ export function LoginPage() {
           {/* Google Sign-In */}
           <GoogleSignInButton
             onSuccess={handleGoogleSuccess}
-            text="signin_with"
+            label="Sign in with Google"
           />
 
           <div className="auth-divider">

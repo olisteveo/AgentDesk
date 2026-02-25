@@ -5,7 +5,7 @@ interface CostPanelProps {
   completedTasks: number;
   totalAgents: number;
   todayApiCost: number;
-  dailySubscriptionShare: number;
+  monthCost: number;
   onOpenCostDashboard: () => void;
 }
 
@@ -14,20 +14,19 @@ export const CostPanel: React.FC<CostPanelProps> = ({
   completedTasks,
   totalAgents,
   todayApiCost,
-  dailySubscriptionShare,
+  monthCost,
   onOpenCostDashboard
 }) => {
   return (
     <div className="stats-panel" onClick={onOpenCostDashboard} style={{ cursor: 'pointer' }}>
-      <h3>Active Tasks: {activeTasks}</h3>
-      <h3>Completed: {completedTasks}</h3>
-      <h3>Total Agents: {totalAgents}</h3>
+      <h3>Active: {activeTasks} | Done: {completedTasks}</h3>
+      <h3>Agents: {totalAgents}</h3>
       <div className="cost-summary">
         <h3>Today's Cost</h3>
-        <div className="cost-amount">${(todayApiCost + dailySubscriptionShare).toFixed(4)}</div>
+        <div className="cost-amount">${todayApiCost.toFixed(4)}</div>
         <div className="cost-breakdown">
-          <span>API: ${todayApiCost.toFixed(4)}</span>
-          <span>Subs: ${dailySubscriptionShare.toFixed(2)}/day</span>
+          <span>API costs today</span>
+          {monthCost > 0 && <span>Month: ${monthCost.toFixed(2)}</span>}
         </div>
       </div>
       <div style={{ marginTop: '8px', fontSize: '10px', color: '#888', textAlign: 'center' }}>

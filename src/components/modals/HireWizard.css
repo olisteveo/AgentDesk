@@ -114,6 +114,59 @@
   color: #1dd1a1;
   font-size: 12px;
   margin-left: 10px;
+  font-weight: 500;
+}
+
+.warning-badge {
+  color: #feca57;
+  font-size: 12px;
+  margin-left: 10px;
+  font-weight: 500;
+}
+
+/* Validation status messages */
+.validation-status {
+  font-size: 12px;
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  line-height: 1.5;
+  animation: fadeInStatus 0.3s ease;
+}
+
+.validation-success {
+  color: #1dd1a1;
+  background: rgba(29, 209, 161, 0.1);
+  border: 1px solid rgba(29, 209, 161, 0.25);
+}
+
+.validation-warning {
+  color: #feca57;
+  background: rgba(254, 202, 87, 0.1);
+  border: 1px solid rgba(254, 202, 87, 0.25);
+}
+
+.validation-error {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.25);
+}
+
+/* Warning message on connected provider cards */
+.provider-warning-msg {
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #feca57;
+  background: rgba(254, 202, 87, 0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(254, 202, 87, 0.15);
+  line-height: 1.5;
+}
+
+@keyframes fadeInStatus {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Form elements */
@@ -330,6 +383,53 @@
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* Desk style picker */
+.desk-picker {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.desk-option {
+  flex: 1;
+  max-width: 140px;
+  padding: 12px 8px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid #333;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.desk-option:hover {
+  border-color: #555;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.desk-option.selected {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+}
+
+.desk-option img {
+  max-height: 60px;
+  object-fit: contain;
+}
+
+.desk-option-label {
+  font-size: 12px;
+  color: #888;
+  font-weight: 500;
+}
+
+.desk-option.selected .desk-option-label {
+  color: #fff;
 }
 
 .manage-add-provider select {

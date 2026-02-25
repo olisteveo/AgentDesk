@@ -1,3 +1,8 @@
+export type SpriteDirection =
+  | 'front' | 'front-left' | 'front-right'
+  | 'left' | 'right'
+  | 'back-left' | 'back' | 'back-right';
+
 export interface Agent {
   id: string;
   name: string;
@@ -11,6 +16,7 @@ export interface Agent {
   deskOffset: { x: number; y: number };
   targetX?: number;
   targetY?: number;
+  direction?: SpriteDirection;
   currentTask?: Task;
   isWorking: boolean;
 }
@@ -66,25 +72,7 @@ export interface Meeting {
   startedAt: number;
 }
 
-export interface Subscription {
-  id: string;
-  service: string;
-  tier: string;
-  monthlyCost: number;
-  annualCost: number;
-  billingCycle: 'monthly' | 'annual';
-  nextBillingDate: string;
-  features: string[];
-  active: boolean;
-}
-
-export interface DailyCost {
-  date: string;
-  apiCosts: Record<string, number>;
-  totalApi: number;
-  subscriptionShare: number;
-  total: number;
-}
+export type DeskType = 'mini' | 'standard' | 'power';
 
 export interface DeskAssignment {
   deskId: string;
@@ -92,6 +80,7 @@ export interface DeskAssignment {
   modelId: string;
   agentName?: string;
   customName?: string;
+  deskType?: DeskType;
 }
 
 export interface Connection {

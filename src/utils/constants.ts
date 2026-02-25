@@ -1,4 +1,4 @@
-import type { Zone, Agent, Subscription, ModelInfo } from '../types';
+import type { Zone, Agent, ModelInfo } from '../types';
 
 export const MODEL_PRICING: Record<string, { input: number; output: number; name: string }> = {
   // OpenAI
@@ -56,42 +56,6 @@ export const PROVIDERS_LIST = [
   { id: 'anthropic', name: 'Anthropic', models: ['claude-opus-4', 'claude-sonnet-4', 'claude-sonnet-4-5', 'claude-haiku-3-5'] },
   { id: 'moonshot',  name: 'Moonshot',  models: ['kimi-k2.5', 'kimi-k1.5'] },
   { id: 'google',    name: 'Google',    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'] },
-];
-
-export const DEFAULT_SUBSCRIPTIONS: Subscription[] = [
-  {
-    id: '1',
-    service: 'OpenAI',
-    tier: 'Pro',
-    monthlyCost: 20,
-    annualCost: 200,
-    billingCycle: 'monthly',
-    nextBillingDate: '2026-03-01',
-    features: ['GPT-4', 'Code Interpreter'],
-    active: true
-  },
-  {
-    id: '2',
-    service: 'Anthropic',
-    tier: 'Pro',
-    monthlyCost: 20,
-    annualCost: 200,
-    billingCycle: 'monthly',
-    nextBillingDate: '2026-03-05',
-    features: ['Claude Opus', 'Claude Sonnet'],
-    active: true
-  },
-  {
-    id: '3',
-    service: 'Moonshot',
-    tier: 'Standard',
-    monthlyCost: 10,
-    annualCost: 100,
-    billingCycle: 'monthly',
-    nextBillingDate: '2026-03-10',
-    features: ['Kimi K2.5'],
-    active: true
-  }
 ];
 
 // Calculate desk positions dynamically based on how many desks exist

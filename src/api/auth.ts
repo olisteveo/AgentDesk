@@ -32,6 +32,7 @@ export interface AuthUser {
   planSelected?: boolean;
   onboardingDone?: boolean;
   avatarId?: string;
+  hasPassword?: boolean;
 }
 
 export interface AuthTeam {
@@ -125,5 +126,15 @@ export function deleteAccount(password?: string): Promise<{ message: string }> {
   return apiRequest('/api/auth/account', {
     method: 'DELETE',
     ...(password ? { body: JSON.stringify({ password }) } : {}),
+  });
+}
+
+export function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  return apiRequest('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }

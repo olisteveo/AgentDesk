@@ -40,6 +40,7 @@ export interface AuthUser {
   planSelected: boolean;
   onboardingDone: boolean;
   avatarId: string;
+  hasPassword: boolean;
 }
 
 // ── Context type ─────────────────────────────────────────────
@@ -101,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       planSelected: res.user.planSelected ?? true,
       onboardingDone: res.user.onboardingDone ?? false,
       avatarId: res.user.avatarId ?? 'avatar1',
+      hasPassword: res.user.hasPassword ?? true,
     };
 
     localStorage.setItem('user', JSON.stringify(userData));

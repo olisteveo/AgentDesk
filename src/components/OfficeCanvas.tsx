@@ -6,75 +6,29 @@ import { AccountSettingsModal } from './modals/AccountSettingsModal';
 import { listDesks, createDesk, deleteDesk } from '../api/desks';
 import { createTask, runTask as runTaskApi, openCode } from '../api/tasks';
 import type { Desk as BackendDesk } from '../api/desks';
-import type { Task, DeskAssignment } from '../types';
+import type { Task, DeskAssignment, Agent, Zone, Particle, SpriteDirection } from '../types';
 import { useActivityLog } from '../hooks/useActivityLog';
 import { useCostTracker } from '../hooks/useCostTracker';
 import { useTaskManager } from '../hooks/useTaskManager';
 import { isCodeRelatedTask } from '../utils/codeDetection';
 import { parseCodeBlocks } from '../utils/parseCodeBlocks';
+import {
+  SPRITE_ASSETS,
+  DIRECTION_GRID,
+  AVATAR_SHEET_MAP,
+  ZONE_DESK_SPRITE,
+  DESK_TYPE_SPRITE,
+  AGENT_AVATAR_SPRITE,
+  getDirectionFromDelta,
+} from '../utils/sprites';
 import MeetingRoom from './MeetingRoom';
-import { ClipboardList, DollarSign, BarChart3, X, TrendingUp, Bot, Trash2, Rss } from 'lucide-react';
-
-interface Agent {
-  id: string;
-  name: string;
-  role: string;
-  zone: string;
-  x: number;
-  y: number;
-  color: string;
-  emoji: string;
-  avatar: string;
-  deskOffset: { x: number; y: number };
-  targetX?: number;
-  targetY?: number;
-  currentTask?: Task;
-  isWorking: boolean;
-}
-
-interface Zone {
-  id?: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  color: string;
-  label: string;
-}
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: string;
-}
+import CostDashboard from './CostDashboard';
+import { ClipboardList, DollarSign, X, Trash2, Rss } from 'lucide-react';
 
 // Meeting types moved to MeetingRoom.tsx
 
-interface Subscription {
-  id: string;
-  service: string;
-  tier: string;
-  monthlyCost: number;
-  annualCost: number;
-  billingCycle: 'monthly' | 'annual';
-  nextBillingDate: string;
-  features: string[];
-  active: boolean;
-}
-
-interface DailyCost {
-  date: string;
-  apiCosts: Record<string, number>;
-  totalApi: number;
-  subscriptionShare: number;
-  total: number;
-}
-
 // Use shared constants — single source of truth
-import { MODEL_PRICING, AVAILABLE_MODELS, DEFAULT_SUBSCRIPTIONS } from '../utils/constants';
+import { MODEL_PRICING, AVAILABLE_MODELS } from '../utils/constants';
 
 
 // Two-column layout: CEO top-left, agent desks alternate right then left
@@ -126,16 +80,6 @@ const DEFAULT_DESKS: Zone[] = [
   { id: 'meeting', x: 0.50, y: 0.55, w: 400, h: 120, color: '#74b9ff', label: 'Meeting Room' }
 ];
 
-// AI Provider Connection
-interface Connection {
-  id: string;
-  provider: 'openai' | 'anthropic' | 'moonshot' | 'google' | 'cohere';
-  name: string;
-  isConnected: boolean;
-  apiKeyMasked: string;
-  models: string[];
-  addedAt: Date;
-}
 
 // No default assignments — loaded from backend on mount
 const DEFAULT_ASSIGNMENTS: DeskAssignment[] = [];
@@ -144,36 +88,7 @@ const INITIAL_AGENTS: Agent[] = [
   { id: 'ceo', name: 'You', role: 'CEO', zone: 'ceo', x: 0, y: 0, color: '#ffd700', emoji: '', avatar: 'avatar1', deskOffset: { x: 0, y: 10 }, isWorking: false }
 ];
 
-// Sprite assets for the office
-const SPRITE_ASSETS = {
-  carpet: '/assets/carpet.png',
-  officeWall: '/assets/office-wall.png',
-  deskMini: '/assets/desk-mini.png',
-  deskStandard: '/assets/desk-standard.png',
-  deskPower: '/assets/desk-boss.png',
-  meetingRoom: '/assets/meeting-room.png',
-  avatar1: '/assets/avatar-01.png',
-  avatar2: '/assets/avatar-02.png',
-  avatar3: '/assets/avatar-03.png',
-};
-
-// Which desk sprite to use for each zone id
-// agent desks cycle: desk1/2→mini, desk3/4→standard, desk5/6→power
-const ZONE_DESK_SPRITE: Record<string, keyof typeof SPRITE_ASSETS> = {
-  ceo:   'deskPower',
-  desk1: 'deskMini',
-  desk2: 'deskMini',
-  desk3: 'deskStandard',
-  desk4: 'deskStandard',
-  desk5: 'deskPower',
-  desk6: 'deskPower',
-  meeting: 'meetingRoom',
-};
-
-// Fallback avatar sprite per agent id (overridden by agent.avatar field)
-const AGENT_AVATAR_SPRITE: Record<string, keyof typeof SPRITE_ASSETS> = {
-  ceo: 'avatar1',
-};
+// Sprite assets + directional sprite system imported from utils/sprites
 
 const OfficeCanvas: React.FC = () => {
   const { user, markOnboardingDone } = useAuth();
@@ -192,8 +107,6 @@ const OfficeCanvas: React.FC = () => {
   const [taskDescription, setTaskDescription] = useState('');
   const [showCostPanel, setShowCostPanel] = useState(false);
   const [showFeedPanel, setShowFeedPanel] = useState(false);
-  const [subscriptions] = useState<Subscription[]>(DEFAULT_SUBSCRIPTIONS);
-  const [,] = useState<DailyCost[]>([]);
   const animationRef = useRef<number | undefined>(undefined);
   const dimensionsRef = useRef({ width: 0, height: 0 });
 
@@ -211,7 +124,8 @@ const OfficeCanvas: React.FC = () => {
   // --- Extracted hooks: activity log, cost tracker, task manager ---
   // Each hook owns its state + backend hydration (loads data on mount)
   const { taskLog, addLogEntry } = useActivityLog(onboardingDone);
-  const { todayApiCost, updateTodayCost } = useCostTracker(onboardingDone);
+  const costTracker = useCostTracker(onboardingDone);
+  const { todayApiCost, updateTodayCost } = costTracker;
   const { tasks, setTasks, taskResults, setTaskResults, removeTask, clearTasks } = useTaskManager({
     deskAssignments,
     onboardingDone,
@@ -319,7 +233,8 @@ const OfficeCanvas: React.FC = () => {
             backendDeskId: bd.id,
             modelId,
             agentName: bd.agent_name,
-            customName: bd.name
+            customName: bd.name,
+            deskType: (bd.desk_type as 'mini' | 'standard' | 'power') || 'mini',
           });
 
           newAgents.push({
@@ -419,6 +334,7 @@ const OfficeCanvas: React.FC = () => {
     agentName: string;
     avatar: 'avatar1' | 'avatar2' | 'avatar3';
     deskName: string;
+    deskType: 'mini' | 'standard' | 'power';
   }) => {
     const { width, height } = dimensionsRef.current;
 
@@ -439,7 +355,7 @@ const OfficeCanvas: React.FC = () => {
         agentName: data.agentName || 'Agent',
         agentColor: deskColor,
         avatarId: data.avatar,
-        deskType: 'mini',
+        deskType: data.deskType || 'mini',
         models: [data.model],
       });
       backendDeskId = backendDesk.id;
@@ -464,7 +380,8 @@ const OfficeCanvas: React.FC = () => {
       backendDeskId,
       modelId: data.model,
       agentName: data.agentName,
-      customName: data.deskName || `Desk ${deskNum}`
+      customName: data.deskName || `Desk ${deskNum}`,
+      deskType: data.deskType || 'mini',
     };
 
     // Create Agent
@@ -501,16 +418,6 @@ const OfficeCanvas: React.FC = () => {
   }, [desks, addLogEntry, closeHireWizard]);
 
   // updateTodayCost is now provided by useCostTracker hook
-
-  const getMonthlySubscriptionTotal = useCallback(() => {
-    return subscriptions
-      .filter(sub => sub.active)
-      .reduce((total, sub) => total + sub.monthlyCost, 0);
-  }, [subscriptions]);
-
-  const getDailySubscriptionShare = useCallback(() => {
-    return getMonthlySubscriptionTotal() / 30;
-  }, [getMonthlySubscriptionTotal]);
 
   const assignTask = useCallback(async () => {
     if (!selectedAgent || !taskTitle) return;
@@ -772,7 +679,10 @@ const OfficeCanvas: React.FC = () => {
         return;
       }
 
-      const spriteKey = zone.id ? ZONE_DESK_SPRITE[zone.id] : undefined;
+      // Resolve sprite: check assignment deskType first, fall back to zone-id mapping
+      const assignment = zone.id ? deskAssignments.find(a => a.deskId === zone.id) : undefined;
+      const spriteKey = (assignment?.deskType ? DESK_TYPE_SPRITE[assignment.deskType] : undefined)
+        || (zone.id ? ZONE_DESK_SPRITE[zone.id] : undefined);
       const spriteImg = spriteKey ? sprites[spriteKey] : undefined;
 
       if (spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
@@ -825,137 +735,66 @@ const OfficeCanvas: React.FC = () => {
     };
 
     const drawZoneLabel = (zone: Zone) => {
-      const spriteKey = zone.id ? ZONE_DESK_SPRITE[zone.id] : undefined;
+      // Resolve sprite: check assignment deskType first, fall back to zone-id mapping
+      const labelAssignment = zone.id ? deskAssignments.find(a => a.deskId === zone.id) : undefined;
+      const spriteKey = (labelAssignment?.deskType ? DESK_TYPE_SPRITE[labelAssignment.deskType] : undefined)
+        || (zone.id ? ZONE_DESK_SPRITE[zone.id] : undefined);
       const spriteImg = spriteKey ? sprites[spriteKey] : undefined;
       let topOfDesk: number;
-      let labelW = 160;
       if (zone.id === 'meeting' && spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
-        // Meeting room uses larger MEETING_H=140 instead of DESK_H
         const MEETING_H = 140;
-        const mW = Math.round(MEETING_H * (spriteImg.naturalWidth / spriteImg.naturalHeight));
         topOfDesk = zone.y - MEETING_H / 2;
-        labelW = Math.max(mW, 120);
       } else if (spriteImg && spriteImg.complete && spriteImg.naturalWidth > 0) {
-        const { dW, dH } = getDeskDims(spriteImg);
+        const { dH } = getDeskDims(spriteImg);
         topOfDesk = zone.y - dH / 2;
-        labelW = Math.max(dW, 120);
       } else {
         topOfDesk = zone.y - zone.h / 2;
       }
 
-      // Label positioned ABOVE the desk
-      ctx.fillStyle = 'rgba(0,0,0,0.85)';
-      ctx.fillRect(zone.x - labelW / 2, topOfDesk - 44, labelW, 30);
-      ctx.fillStyle = zone.color;
+      // Measure text to fit the label background to the word
       ctx.font = 'bold 12px sans-serif';
+      const textW = ctx.measureText(zone.label).width;
+      const pad = 16;            // horizontal padding each side
+      const labelW = textW + pad * 2;
+      const labelH = 24;
+      const labelY = topOfDesk - 38;
+      const radius = 6;
+
+      // Rounded-rect background
+      ctx.fillStyle = 'rgba(0,0,0,0.85)';
+      ctx.beginPath();
+      ctx.roundRect(zone.x - labelW / 2, labelY, labelW, labelH, radius);
+      ctx.fill();
+
+      // Text
+      ctx.fillStyle = zone.color;
       ctx.textAlign = 'center';
-      ctx.fillText(zone.label, zone.x, topOfDesk - 23);
-    };
-
-    const drawWaterCooler = (x: number, y: number) => {
-      const size = 50;
-      
-      // Water bottle (blue)
-      ctx.fillStyle = '#74b9ff';
-      ctx.beginPath();
-      ctx.arc(x, y - size/3, size/3, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Bottle highlight
-      ctx.fillStyle = '#a8d8ff';
-      ctx.beginPath();
-      ctx.arc(x - 8, y - size/3 - 5, 8, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Stand/base
-      ctx.fillStyle = '#636e72';
-      ctx.fillRect(x - size/2, y, size, size/2);
-      
-      // Stand detail
-      ctx.fillStyle = '#74b9ff';
-      ctx.fillRect(x - 5, y + 5, 10, size/2 - 10);
-      
-      // Spigot
-      ctx.fillStyle = '#b2bec3';
-      ctx.beginPath();
-      ctx.arc(x, y + 8, 6, 0, Math.PI * 2);
-      ctx.fill();
-    };
-
-    const drawOfficePlant = (x: number, y: number, size: number = 40) => {
-      // Pot
-      ctx.fillStyle = '#8B4513';
-      ctx.beginPath();
-      ctx.moveTo(x - size/3, y);
-      ctx.lineTo(x + size/3, y);
-      ctx.lineTo(x + size/4, y + size/2);
-      ctx.lineTo(x - size/4, y + size/2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Plant leaves
-      ctx.fillStyle = '#228B22';
-      const leaves = [
-        { x: 0, y: -size/2, r: size/3 },
-        { x: -size/4, y: -size/3, r: size/4 },
-        { x: size/4, y: -size/3, r: size/4 },
-        { x: 0, y: -size/4, r: size/5 }
-      ];
-
-      leaves.forEach(leaf => {
-        ctx.beginPath();
-        ctx.arc(x + leaf.x, y + leaf.y, leaf.r, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    };
-
-    const drawMonitor = (x: number, y: number, width: number = 60, height: number = 40) => {
-      // Monitor stand
-      ctx.fillStyle = '#333';
-      ctx.fillRect(x - 5, y + height/2, 10, 15);
-      ctx.fillRect(x - 15, y + height/2 + 15, 30, 5);
-
-      // Monitor frame
-      ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(x - width/2, y - height/2, width, height);
-
-      // Screen glow
-      const screenGradient = ctx.createLinearGradient(x - width/2, y - height/2, x - width/2, y + height/2);
-      screenGradient.addColorStop(0, '#2a3a4a');
-      screenGradient.addColorStop(1, '#1a2a3a');
-      ctx.fillStyle = screenGradient;
-      ctx.fillRect(x - width/2 + 3, y - height/2 + 3, width - 6, height - 6);
-
-      // Code lines on screen
-      ctx.fillStyle = '#4a9a4a';
-      for (let i = 0; i < 4; i++) {
-        const lineWidth = Math.random() * 30 + 10;
-        ctx.fillRect(x - width/2 + 8, y - height/2 + 8 + i * 7, lineWidth, 2);
-      }
+      ctx.fillText(zone.label, zone.x, labelY + labelH / 2 + 4);
     };
 
     const drawWorker = (agent: Agent, time: number) => {
       const bob = agent.isWorking ? Math.sin(time / 300) * 2 : Math.sin(time / 500) * 1.5;
 
-      // Resolve avatar sprite: agent.avatar field wins, then fallback map, then cycle
+      // Resolve avatar base key: agent.avatar field wins, then fallback map, then cycle
       const agentIndex = parseInt(agent.id.replace(/\D/g, '') || '0') % 3;
-      const spriteKey: keyof typeof SPRITE_ASSETS =
-        (agent.avatar && agent.avatar in sprites)
-          ? (agent.avatar as keyof typeof SPRITE_ASSETS)
+      const baseKey: string =
+        (agent.avatar && (agent.avatar in sprites || (agent.avatar + 'Sheet') in AVATAR_SHEET_MAP || agent.avatar in AVATAR_SHEET_MAP))
+          ? agent.avatar
           : (AGENT_AVATAR_SPRITE[agent.id]
-              ?? (['avatar1', 'avatar2', 'avatar3'][agentIndex] as keyof typeof SPRITE_ASSETS));
-      const avatarImg = sprites[spriteKey];
+              ?? ['avatar1', 'avatar2', 'avatar3'][agentIndex]);
 
-      // Avatar size — square sprites so avW === avH === AVATAR_PX
+      // Try to use the directional sprite sheet
+      const sheetKey = AVATAR_SHEET_MAP[baseKey];
+      const sheetImg = sheetKey ? sprites[sheetKey] : null;
+      const fallbackImg = sprites[baseKey];
+      const direction: SpriteDirection = agent.direction || 'front';
+
+      // Avatar size -- rendered at AVATAR_PX
       const avW = AVATAR_PX;
       const avH = AVATAR_PX;
 
-      // Position avatar to the RIGHT of the desk sprite.
-      // Use a fixed offset from zone centre so all avatars sit the same
-      // distance from their desk regardless of desk sprite width.
-      const AVATAR_OFFSET_X = 44; // consistent gap from zone centre
-
-      // Avatar stands to the right of the desk, vertically centred on desk
+      // Position avatar to the RIGHT of the desk sprite
+      const AVATAR_OFFSET_X = 44;
       const avX = Math.round(agent.x + AVATAR_OFFSET_X);
       const avY = Math.round(agent.y - avH / 2 + bob);
 
@@ -965,12 +804,32 @@ const OfficeCanvas: React.FC = () => {
       ctx.ellipse(avX + avW / 2, avY + avH + 2, avW * 0.4, 5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
+      let drawn = false;
+
+      // Directional sprite sheet: slice the correct cell from the 3x3 grid
+      if (sheetImg && sheetImg.complete && sheetImg.naturalWidth > 0) {
+        const grid = DIRECTION_GRID[direction];
+        const cellW = sheetImg.naturalWidth / 3;
+        const cellH = sheetImg.naturalHeight / 3;
+        const sx = grid.col * cellW;
+        const sy = grid.row * cellH;
+
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(avatarImg, avX, avY, avW, avH);
+        ctx.drawImage(sheetImg, sx, sy, cellW, cellH, avX, avY, avW, avH);
         ctx.imageSmoothingEnabled = true;
-      } else {
-        // Fallback
+        drawn = true;
+      }
+
+      // Fallback to single static sprite
+      if (!drawn && fallbackImg && fallbackImg.complete && fallbackImg.naturalWidth > 0) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(fallbackImg, avX, avY, avW, avH);
+        ctx.imageSmoothingEnabled = true;
+        drawn = true;
+      }
+
+      // Ultimate fallback: colored shape
+      if (!drawn) {
         ctx.fillStyle = agent.color + '60';
         ctx.beginPath();
         ctx.arc(avX + avW / 2, avY + avH * 0.3, avW * 0.3, 0, Math.PI * 2);
@@ -992,7 +851,7 @@ const OfficeCanvas: React.FC = () => {
       ctx.textAlign = 'center';
       ctx.fillText(agent.name, avX + avW / 2, tagY + 10);
 
-      // Status dot — top-right corner of avatar
+      // Status dot -- top-right corner of avatar
       const statusColor = agent.targetX !== undefined ? '#feca57'
         : agent.isWorking ? '#ff6b6b' : '#1dd1a1';
       ctx.fillStyle = statusColor;
@@ -1003,7 +862,7 @@ const OfficeCanvas: React.FC = () => {
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Task dot — top-left
+      // Task dot -- top-left
       if (agent.currentTask) {
         ctx.fillStyle = '#feca57';
         ctx.beginPath();
@@ -1038,6 +897,7 @@ const OfficeCanvas: React.FC = () => {
           if (dist > 5) {
             const newX = agent.x + (dx / dist) * 4;
             const newY = agent.y + (dy / dist) * 4;
+            const direction = getDirectionFromDelta(dx, dy);
 
             if (Math.random() > 0.6) {
               setParticles(p => [...p, {
@@ -1049,9 +909,10 @@ const OfficeCanvas: React.FC = () => {
               }]);
             }
 
-            return { ...agent, x: newX, y: newY };
+            return { ...agent, x: newX, y: newY, direction };
           } else {
-            return { ...agent, targetX: undefined, targetY: undefined };
+            // Arrived -- face front (default idle direction)
+            return { ...agent, targetX: undefined, targetY: undefined, direction: 'front' as SpriteDirection };
           }
         }
         return agent;
@@ -1224,11 +1085,14 @@ const OfficeCanvas: React.FC = () => {
 
   return (
     <div className="office-canvas-container">
-      <div className="office-frame">
-        <canvas ref={canvasRef} className="office-canvas"
-          onMouseMove={handleCanvasMouseMove}
-          onMouseLeave={() => setTooltip(null)}
-        />
+      <div className="office-frame-wrapper">
+        <div className="office-frame-watermark" />
+        <div className="office-frame">
+          <canvas ref={canvasRef} className="office-canvas"
+            onMouseMove={handleCanvasMouseMove}
+            onMouseLeave={() => setTooltip(null)}
+          />
+        </div>
       </div>
 
       {/* Canvas hover tooltip */}
@@ -1438,10 +1302,9 @@ const OfficeCanvas: React.FC = () => {
           <h3>Agents: {agents.filter(a => a.id !== 'ceo').length}</h3>
           <div className="cost-summary">
             <h3>Today's Cost</h3>
-            <div className="cost-amount">${(todayApiCost + getDailySubscriptionShare()).toFixed(4)}</div>
+            <div className="cost-amount">${todayApiCost.toFixed(4)}</div>
             <div className="cost-breakdown">
-              <span>API: ${todayApiCost.toFixed(4)}</span>
-              <span>Subs: ${getDailySubscriptionShare().toFixed(2)}/day</span>
+              <span>API costs today</span>
             </div>
           </div>
           <div style={{ marginTop: '8px', fontSize: '10px', color: '#888', textAlign: 'center' }}>
@@ -1548,89 +1411,20 @@ const OfficeCanvas: React.FC = () => {
         </div>
       )}
 
-      {showCostPanel && (
-        <div className="cost-panel-overlay" onClick={() => setShowCostPanel(false)}>
-          <div className="cost-panel" onClick={e => e.stopPropagation()}>
-            <div className="cost-panel-header">
-              <h2><DollarSign size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Cost Dashboard</h2>
-              <button className="close-btn" onClick={() => setShowCostPanel(false)}><X size={16} /></button>
-            </div>
-
-            <div className="cost-section">
-              <h3><BarChart3 size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Today's Spending</h3>
-              <div className="cost-cards">
-                <div className="cost-card api">
-                  <div className="cost-label">API Calls</div>
-                  <div className="cost-value">${todayApiCost.toFixed(4)}</div>
-                </div>
-                <div className="cost-card subscription">
-                  <div className="cost-label">Daily Subs</div>
-                  <div className="cost-value">${getDailySubscriptionShare().toFixed(2)}</div>
-                </div>
-                <div className="cost-card total">
-                  <div className="cost-label">Total Today</div>
-                  <div className="cost-value">${(todayApiCost + getDailySubscriptionShare()).toFixed(4)}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="cost-section">
-              <h3><ClipboardList size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Active Subscriptions</h3>
-              <div className="subscriptions-list">
-                {subscriptions.filter(s => s.active).map(sub => (
-                  <div key={sub.id} className="subscription-item">
-                    <div className="sub-info">
-                      <div className="sub-name">{sub.service}</div>
-                      <div className="sub-tier">{sub.tier}</div>
-                    </div>
-                    <div className="sub-cost">
-                      <div className="sub-monthly">${sub.monthlyCost}/mo</div>
-                      <div className="sub-next">Next: {sub.nextBillingDate}</div>
-                    </div>
-                    <div className="sub-features">
-                      {sub.features.map((f, i) => (
-                        <span key={i} className="feature-tag">{f}</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="monthly-total">
-                Monthly Total: <strong>${getMonthlySubscriptionTotal()}/month</strong>
-              </div>
-            </div>
-
-            <div className="cost-section">
-              <h3><Bot size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Model Pricing (per 1K tokens)</h3>
-              <div className="pricing-table">
-                {Object.entries(MODEL_PRICING).map(([id, pricing]) => (
-                  <div key={id} className="pricing-row">
-                    <span className="pricing-name">{pricing.name}</span>
-                    <span className="pricing-input">In: ${(pricing.input * 1000).toFixed(2)}</span>
-                    <span className="pricing-output">Out: ${(pricing.output * 1000).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="cost-section">
-              <h3><TrendingUp size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Recent Tasks with Costs</h3>
-              <div className="task-costs">
-                {tasks.filter(t => t.cost).slice(-10).reverse().map(task => (
-                  <div key={task.id} className="task-cost-item">
-                    <span className="task-name">{task.name}</span>
-                    <span className="task-model">{task.modelUsed}</span>
-                    <span className="task-cost">${task.cost?.toFixed(4)}</span>
-                  </div>
-                ))}
-                {tasks.filter(t => t.cost).length === 0 && (
-                  <div className="no-tasks">No tasks with cost tracking yet</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <CostDashboard
+        show={showCostPanel}
+        onClose={() => setShowCostPanel(false)}
+        todayApiCost={costTracker.todayApiCost}
+        monthCost={costTracker.monthCost}
+        dailyHistory={costTracker.dailyHistory}
+        byModel={costTracker.byModel}
+        byDesk={costTracker.byDesk}
+        alerts={costTracker.alerts}
+        connectedProviders={costTracker.connectedProviders}
+        isLoading={costTracker.isLoading}
+        onRefresh={costTracker.refreshUsage}
+        onAcknowledgeAlert={costTracker.acknowledgeAlert}
+      />
 
       {/* Expanded Live Feed */}
       {showFeedPanel && (
@@ -1722,6 +1516,18 @@ const OfficeCanvas: React.FC = () => {
 
             {tasks.length === 0 && (
               <div className="feed-empty" style={{ padding: '30px', textAlign: 'center' }}>No tasks yet</div>
+            )}
+
+            {/* Activity Log */}
+            {taskLog.length > 0 && (
+              <div className="feed-section feed-activity-log">
+                <h3>Activity Log ({taskLog.length})</h3>
+                <div className="feed-activity-entries">
+                  {taskLog.map((entry, i) => (
+                    <div key={i} className="feed-activity-entry">{entry}</div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>

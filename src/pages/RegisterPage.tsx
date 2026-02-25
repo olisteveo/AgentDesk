@@ -140,7 +140,7 @@ export function RegisterPage() {
                 setSubmitting(false);
               }
             }}
-            text="signup_with"
+            label="Sign up with Google"
           />
 
           <div className="auth-divider">

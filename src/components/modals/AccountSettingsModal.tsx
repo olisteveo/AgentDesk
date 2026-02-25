@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { deleteAccount, selectPlan } from '../../api/auth';
-import { Check, Zap } from 'lucide-react';
+import { deleteAccount, selectPlan, changePassword } from '../../api/auth';
+import { Check, Zap, Eye, EyeOff } from 'lucide-react';
 
 interface AccountSettingsModalProps {
   isOpen: boolean;
@@ -34,10 +34,41 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  // Change password state
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Password visibility toggles
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [showDeletePw, setShowDeletePw] = useState(false);
+
   // Billing state
   const [changingPlan, setChangingPlan] = useState(false);
   const [planError, setPlanError] = useState('');
   const [planSuccess, setPlanSuccess] = useState('');
+
+  // Reset change-password form when modal closes (component stays mounted)
+  useEffect(() => {
+    if (!isOpen) {
+      setShowChangePassword(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordError('');
+      setPasswordSuccess('');
+      setShowCurrentPw(false);
+      setShowNewPw(false);
+      setShowConfirmPw(false);
+      setShowDeletePw(false);
+    }
+  }, [isOpen]);
 
   const handleLogout = async () => {
     onClose();
@@ -59,6 +90,44 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
       setDeleteError(msg);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All fields are required');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setPasswordSuccess('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setShowChangePassword(false);
+        setPasswordSuccess('');
+      }, 2000);
+    } catch (err: unknown) {
+      const msg = (err && typeof err === 'object' && 'message' in err)
+        ? (err as { message: string }).message
+        : 'Failed to change password';
+      setPasswordError(msg);
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -144,6 +213,148 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
               </select>
             </div>
 
+            {/* Change Password (only for users with a password -- not Google OAuth) */}
+            <div style={s.divider}>
+              {user?.hasPassword === false ? (
+                <p style={{ color: '#666', fontSize: 13, margin: 0 }}>
+                  Signed in with Google -- password management is not available.
+                </p>
+              ) : !showChangePassword ? (
+                <button
+                  onClick={() => setShowChangePassword(true)}
+                  style={{
+                    width: '100%', padding: 12, background: 'transparent',
+                    border: '1px solid #444', borderRadius: 6,
+                    color: '#ccc', cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: 13,
+                  }}
+                >
+                  Change Password
+                </button>
+              ) : (
+                <div style={{
+                  background: 'rgba(102,126,234,0.04)',
+                  border: '1px solid rgba(102,126,234,0.15)',
+                  borderRadius: 8, padding: 16,
+                }}>
+                  <p style={{ color: '#aaa', fontSize: 13, marginBottom: 12 }}>
+                    Enter your current password and choose a new one.
+                  </p>
+
+                  <input type="text" name="prevent-autofill-pw" autoComplete="off" style={{ display: 'none' }} tabIndex={-1} />
+                  <div style={{ position: 'relative', marginBottom: 8 }}>
+                    <input
+                      type={showCurrentPw ? 'text' : 'password'}
+                      placeholder="Current password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                      style={{ ...s.input, fontSize: 13, padding: '10px 38px 10px 10px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPw(!showCurrentPw)}
+                      style={{
+                        position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                      }}
+                      tabIndex={-1}
+                    >
+                      {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <div style={{ position: 'relative', marginBottom: 8 }}>
+                    <input
+                      type={showNewPw ? 'text' : 'password'}
+                      placeholder="New password (min. 8 characters)"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                      style={{ ...s.input, fontSize: 13, padding: '10px 38px 10px 10px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPw(!showNewPw)}
+                      style={{
+                        position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                      }}
+                      tabIndex={-1}
+                    >
+                      {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <div style={{ position: 'relative', marginBottom: 8 }}>
+                    <input
+                      type={showConfirmPw ? 'text' : 'password'}
+                      placeholder="Confirm new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                      style={{ ...s.input, fontSize: 13, padding: '10px 38px 10px 10px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPw(!showConfirmPw)}
+                      style={{
+                        position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                      }}
+                      tabIndex={-1}
+                    >
+                      {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+
+                  {passwordError && (
+                    <p style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 8 }}>{passwordError}</p>
+                  )}
+                  {passwordSuccess && (
+                    <p style={{ color: '#4ade80', fontSize: 12, marginBottom: 8 }}>{passwordSuccess}</p>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => {
+                        setShowChangePassword(false);
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setPasswordError('');
+                        setPasswordSuccess('');
+                      }}
+                      style={{
+                        flex: 1, padding: 10, background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid #333', borderRadius: 6, color: '#aaa',
+                        cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleChangePassword}
+                      disabled={changingPassword}
+                      style={{
+                        flex: 1, padding: 10,
+                        background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                        border: 'none', borderRadius: 6,
+                        color: '#fff', cursor: changingPassword ? 'wait' : 'pointer',
+                        fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                      }}
+                    >
+                      {changingPassword ? 'Saving...' : 'Update Password'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Log Out */}
             <div style={s.divider}>
               <button
@@ -178,13 +389,28 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     This action cannot be undone.
                   </p>
 
-                  <input
-                    type="password"
-                    placeholder="Enter your password to confirm"
-                    value={deletePassword}
-                    onChange={(e) => setDeletePassword(e.target.value)}
-                    style={{ ...s.input, marginBottom: 8, fontSize: 13, padding: 10 }}
-                  />
+                  {user?.hasPassword !== false && (
+                    <div style={{ position: 'relative', marginBottom: 8 }}>
+                      <input
+                        type={showDeletePw ? 'text' : 'password'}
+                        placeholder="Enter your password to confirm"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        style={{ ...s.input, fontSize: 13, padding: '10px 38px 10px 10px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDeletePw(!showDeletePw)}
+                        style={{
+                          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                          background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                        }}
+                        tabIndex={-1}
+                      >
+                        {showDeletePw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  )}
 
                   {deleteError && (
                     <p style={{ color: '#ff6b6b', fontSize: 12, marginBottom: 8 }}>{deleteError}</p>

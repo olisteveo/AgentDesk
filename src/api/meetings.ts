@@ -130,3 +130,19 @@ export function reactivateMeeting(
     method: 'PATCH',
   });
 }
+
+/** Delete a single meeting. */
+export function deleteMeeting(
+  meetingId: string,
+): Promise<{ message: string; id: string }> {
+  return apiRequest(`/api/meetings/${meetingId}`, {
+    method: 'DELETE',
+  });
+}
+
+/** Delete all meetings for the team. */
+export function clearAllMeetings(): Promise<{ message: string; count: number }> {
+  return apiRequest('/api/meetings', {
+    method: 'DELETE',
+  });
+}

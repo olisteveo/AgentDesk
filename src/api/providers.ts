@@ -20,6 +20,7 @@ export interface ValidateResult {
   valid: boolean;
   provider: string;
   error?: string;
+  warning?: string;
 }
 
 export interface ProviderModel {
@@ -73,7 +74,7 @@ export function disconnectProvider(
 /** Test an already-stored API key. */
 export function testProvider(
   credentialId: string,
-): Promise<{ valid: boolean; error?: string }> {
+): Promise<{ valid: boolean; error?: string; warning?: string }> {
   return apiRequest(`/api/providers/${credentialId}/test`, {
     method: 'POST',
   });
