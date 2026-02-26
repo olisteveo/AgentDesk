@@ -24,6 +24,9 @@ export const MODEL_PRICING: Record<string, { input: number; output: number; name
   'gemini-2.5-pro':       { input: 0.00000125, output: 0.00001,   name: 'Gemini 2.5 Pro' },
   'gemini-2.5-flash':     { input: 0.00000015, output: 0.0000006, name: 'Gemini 2.5 Flash' },
   'gemini-2.5-flash-lite':{ input: 0.0000000375,output:0.00000015,name: 'Gemini 2.5 Flash Lite' },
+  // DeepSeek
+  'deepseek-chat':        { input: 0.00000027, output: 0.0000011, name: 'DeepSeek V3' },
+  'deepseek-reasoner':    { input: 0.00000055, output: 0.0000022, name: 'DeepSeek R1' },
 };
 
 export const AVAILABLE_MODELS: ModelInfo[] = [
@@ -49,6 +52,9 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
   { id: 'gemini-2.5-pro',        name: 'Gemini 2.5 Pro',        provider: 'google', color: '#a5d4d4' },
   { id: 'gemini-2.5-flash',      name: 'Gemini 2.5 Flash',      provider: 'google', color: '#b5e4e4' },
   { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', provider: 'google', color: '#d5e4c4' },
+  // DeepSeek
+  { id: 'deepseek-chat',     name: 'DeepSeek V3', provider: 'deepseek', color: '#4d8bf5' },
+  { id: 'deepseek-reasoner', name: 'DeepSeek R1', provider: 'deepseek', color: '#6c5ce7' },
 ];
 
 export const PROVIDERS_LIST = [
@@ -56,6 +62,7 @@ export const PROVIDERS_LIST = [
   { id: 'anthropic', name: 'Anthropic', models: ['claude-opus-4', 'claude-sonnet-4', 'claude-sonnet-4-5', 'claude-haiku-3-5'] },
   { id: 'moonshot',  name: 'Moonshot',  models: ['kimi-k2.5', 'kimi-k1.5'] },
   { id: 'google',    name: 'Google',    models: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'] },
+  { id: 'deepseek',  name: 'DeepSeek',  models: ['deepseek-chat', 'deepseek-reasoner'] },
 ];
 
 // Calculate desk positions dynamically based on how many desks exist

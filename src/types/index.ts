@@ -81,6 +81,7 @@ export interface DeskAssignment {
   agentName?: string;
   customName?: string;
   deskType?: DeskType;
+  avatarId?: string;
 }
 
 export interface Connection {

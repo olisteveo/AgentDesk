@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import './OfficeCanvas.css';
 import HireWizard from './modals/HireWizard';
 import { AccountSettingsModal } from './modals/AccountSettingsModal';
-import { listDesks, createDesk, deleteDesk } from '../api/desks';
+import { listDesks, createDesk, deleteDesk, updateDesk, addModelToDesk, removeModelFromDesk, setPrimaryModel } from '../api/desks';
 import { createTask, runTask as runTaskApi, openCode } from '../api/tasks';
 import type { Desk as BackendDesk } from '../api/desks';
 import type { Task, DeskAssignment, Agent, Zone, Particle, SpriteDirection } from '../types';
@@ -33,6 +33,8 @@ import AgentChat from './AgentChat';
 import { listRules } from '../api/rules';
 import { CORE_RULES_PRESETS } from '../utils/coreRulesPresets';
 import type { PlanTier } from '../utils/tierConfig';
+import ApiKeyDetectInput from './ui/ApiKeyDetectInput';
+import type { DetectedProvider } from './ui/ApiKeyDetectInput';
 
 // Meeting types moved to MeetingRoom.tsx
 
@@ -127,7 +129,8 @@ const OfficeCanvas: React.FC = () => {
 
   // Onboarding state — restore from auth context if already completed
   const [onboardingDone, setOnboardingDone] = useState(user?.onboardingDone ?? false);
-  const [onboardingStep, setOnboardingStep] = useState<1 | 2>(1);
+  const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
+  const [onboardingProvider, setOnboardingProvider] = useState<DetectedProvider | null>(null);
   const [ceoName, setCeoName] = useState(user?.displayName ?? 'You');
   const [ceoSprite, setCeoSprite] = useState<'avatar1' | 'avatar2' | 'avatar3'>(
     (user?.avatarId as 'avatar1' | 'avatar2' | 'avatar3') ?? 'avatar1'
@@ -154,6 +157,8 @@ const OfficeCanvas: React.FC = () => {
 
   // Hire Agent wizard state
   const [showHireWizard, setShowHireWizard] = useState(false);
+  // Provider to pre-load into HireWizard (set after onboarding Step 3)
+  const [wizardPreloadedProvider, setWizardPreloadedProvider] = useState<DetectedProvider | null>(null);
 
   // Tooltip state for canvas hover
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; sub: string } | null>(null);
@@ -270,6 +275,7 @@ const OfficeCanvas: React.FC = () => {
             agentName: bd.agent_name,
             customName: bd.name,
             deskType: (bd.desk_type as 'mini' | 'standard' | 'power') || 'mini',
+            avatarId: bd.avatar_id || 'avatar1',
           });
 
           newAgents.push({
@@ -381,6 +387,7 @@ const OfficeCanvas: React.FC = () => {
 
   const closeHireWizard = useCallback(() => {
     setShowHireWizard(false);
+    setWizardPreloadedProvider(null);
   }, []);
 
   const completeHireWizard = useCallback(async (data: {
@@ -448,6 +455,7 @@ const OfficeCanvas: React.FC = () => {
       agentName: data.agentName,
       customName: data.deskName || `Desk ${deskNum}`,
       deskType: data.deskType || 'mini',
+      avatarId: data.avatar,
     };
 
     // Create Agent
@@ -1232,6 +1240,13 @@ const OfficeCanvas: React.FC = () => {
       console.error('Failed to save onboarding:', err);
       // Non-blocking — user can still use the office
     }
+
+    // Auto-launch Hire Agent wizard with the onboarding provider pre-loaded
+    // so the user picks a model, names an agent, and sets up their first desk
+    if (onboardingProvider) {
+      setWizardPreloadedProvider(onboardingProvider);
+      setShowHireWizard(true);
+    }
   };
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1286,18 +1301,20 @@ const OfficeCanvas: React.FC = () => {
         </div>
       )}
 
-      {/* Onboarding Modal — 2-step flow */}
+      {/* Onboarding Modal — 3-step flow */}
       {!onboardingDone && (
         <div className="onboarding-overlay">
-          <div className={`onboarding-modal${onboardingStep === 2 ? ' wide' : ''}`}>
+          <div className={`onboarding-modal${onboardingStep === 2 ? ' wide' : ''}${onboardingStep === 3 ? ' medium' : ''}`}>
             {/* Step indicator */}
             <div className="onboarding-steps">
               <div className={`step-dot${onboardingStep >= 1 ? ' active' : ''}`} />
-              <div className="step-line" />
+              <div className={`step-line${onboardingStep >= 2 ? ' active' : ''}`} />
               <div className={`step-dot${onboardingStep >= 2 ? ' active' : ''}`} />
+              <div className={`step-line${onboardingStep >= 3 ? ' active' : ''}`} />
+              <div className={`step-dot${onboardingStep >= 3 ? ' active' : ''}`} />
             </div>
 
-            {onboardingStep === 1 ? (
+            {onboardingStep === 1 && (
               <>
                 <img
                   className="onboarding-logo"
@@ -1352,7 +1369,9 @@ const OfficeCanvas: React.FC = () => {
                   Next — Set Core Rules →
                 </button>
               </>
-            ) : (
+            )}
+
+            {onboardingStep === 2 && (
               <>
                 <h1 style={{ fontSize: 22 }}>Set Your Core Rules</h1>
                 <p className="onboarding-subtitle">
@@ -1402,8 +1421,46 @@ const OfficeCanvas: React.FC = () => {
                   </button>
                   <button
                     className="onboarding-enter-btn"
-                    onClick={handleOnboardingComplete}
+                    onClick={() => setOnboardingStep(3)}
                     disabled={!selectedCorePreset}
+                  >
+                    Next — Connect a Provider →
+                  </button>
+                </div>
+              </>
+            )}
+
+            {onboardingStep === 3 && (
+              /* ── Step 3: Connect Your First AI Provider ────────── */
+              <>
+                <h1 style={{ fontSize: 22 }}>Connect Your First AI Provider</h1>
+                <p className="onboarding-subtitle">
+                  Paste any API key — we'll detect the provider automatically
+                </p>
+
+                <ApiKeyDetectInput
+                  showHints
+                  onDetected={(result) => setOnboardingProvider(result)}
+                />
+
+                <div className="onboarding-provider-hint-card">
+                  <Sparkles size={14} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                  <p>
+                    You can add more providers anytime from the Hire Agent wizard. One is enough to get started.
+                  </p>
+                </div>
+
+                <div className="onboarding-nav">
+                  <button
+                    className="onboarding-back-btn"
+                    onClick={() => setOnboardingStep(2)}
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    className="onboarding-enter-btn"
+                    onClick={handleOnboardingComplete}
+                    disabled={!onboardingProvider}
                   >
                     Enter the Office →
                   </button>
@@ -2046,6 +2103,7 @@ const OfficeCanvas: React.FC = () => {
           deskAssignments={deskAssignments}
           onComplete={completeHireWizard}
           onClose={closeHireWizard}
+          preloadedProvider={wizardPreloadedProvider}
           onDeskRemoved={async (deskId) => {
             // Delete from backend first
             const assignment = deskAssignments.find(a => a.deskId === deskId);
@@ -2056,9 +2114,105 @@ const OfficeCanvas: React.FC = () => {
                 console.error('Failed to delete desk from backend:', err);
               }
             }
+            // Clean up all frontend state
             setDesks(prev => prev.filter(d => d.id !== deskId));
             setDeskAssignments(prev => prev.filter(a => a.deskId !== deskId));
             setAgents(prev => prev.filter(a => a.zone !== deskId));
+            setTasks(prev => prev.filter(t => t.assignee !== `agent-${deskId}`));
+            setTaskResults(prev => {
+              const next = { ...prev };
+              Object.keys(next).forEach(taskId => {
+                const task = tasks.find(t => t.id === taskId);
+                if (task?.assignee === `agent-${deskId}`) delete next[taskId];
+              });
+              return next;
+            });
+            if (chatAgent?.zone === deskId) setChatAgent(null);
+          }}
+          onProviderDisconnected={async (providerId, affectedDeskIds) => {
+            // Cascade: delete all affected desks from backend + clean up state
+            const affectedAssignments = deskAssignments.filter(a => affectedDeskIds.includes(a.deskId));
+            for (const assignment of affectedAssignments) {
+              if (assignment.backendDeskId) {
+                try {
+                  await deleteDesk(assignment.backendDeskId);
+                } catch (err) {
+                  console.error('Failed to cascade-delete desk:', err);
+                }
+              }
+            }
+
+            // Bulk clean frontend state
+            const affectedAgentIds = new Set(affectedDeskIds.map(id => `agent-${id}`));
+            setDesks(prev => prev.filter(d => !affectedDeskIds.includes(d.id!)));
+            setDeskAssignments(prev => prev.filter(a => !affectedDeskIds.includes(a.deskId)));
+            setAgents(prev => prev.filter(a => !affectedDeskIds.includes(a.zone)));
+            setTasks(prev => prev.filter(t => !affectedAgentIds.has(t.assignee)));
+            setTaskResults(prev => {
+              const next = { ...prev };
+              Object.keys(next).forEach(taskId => {
+                const task = tasks.find(t => t.id === taskId);
+                if (task && affectedAgentIds.has(task.assignee)) delete next[taskId];
+              });
+              return next;
+            });
+            if (chatAgent && affectedDeskIds.includes(chatAgent.zone)) setChatAgent(null);
+            addLogEntry(`Disconnected ${providerId} — removed ${affectedDeskIds.length} desk(s)`);
+          }}
+          onDeskEdited={async (deskId, changes) => {
+            const assignment = deskAssignments.find(a => a.deskId === deskId);
+
+            // Update backend
+            if (assignment?.backendDeskId) {
+              try {
+                await updateDesk(assignment.backendDeskId, {
+                  name: changes.deskName,
+                  agentName: changes.agentName,
+                  avatarId: changes.avatar,
+                  deskType: changes.deskType,
+                });
+
+                // Handle model change
+                if (changes.modelId && changes.modelId !== assignment.modelId) {
+                  try {
+                    await addModelToDesk(assignment.backendDeskId, changes.modelId);
+                    await setPrimaryModel(assignment.backendDeskId, changes.modelId);
+                    await removeModelFromDesk(assignment.backendDeskId, assignment.modelId);
+                  } catch {
+                    // If model swap fails partially, still update frontend
+                  }
+                }
+              } catch (err) {
+                console.error('Failed to update desk:', err);
+              }
+            }
+
+            // Update frontend state
+            if (changes.deskName) {
+              setDesks(prev => prev.map(d =>
+                d.id === deskId ? { ...d, label: changes.deskName! } : d
+              ));
+            }
+            setDeskAssignments(prev => prev.map(a => {
+              if (a.deskId !== deskId) return a;
+              return {
+                ...a,
+                ...(changes.modelId && { modelId: changes.modelId }),
+                ...(changes.deskName && { customName: changes.deskName }),
+                ...(changes.agentName && { agentName: changes.agentName }),
+                ...(changes.avatar && { avatarId: changes.avatar }),
+                ...(changes.deskType && { deskType: changes.deskType }),
+              };
+            }));
+            setAgents(prev => prev.map(a => {
+              if (a.zone !== deskId) return a;
+              return {
+                ...a,
+                ...(changes.agentName && { name: changes.agentName }),
+                ...(changes.avatar && { avatar: changes.avatar }),
+              };
+            }));
+            addLogEntry(`Updated desk "${changes.deskName || deskId}"`);
           }}
         />
       )}
