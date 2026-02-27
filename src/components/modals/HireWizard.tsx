@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { AVAILABLE_MODELS, MODEL_PRICING, PROVIDERS_LIST } from '../../utils/constants';
+import { AVAILABLE_MODELS, MODEL_PRICING, PROVIDERS_LIST, ROLE_ARCHETYPES, MODEL_FRIENDLY_LABELS } from '../../utils/constants';
+import type { RoleArchetype, ModelTier } from '../../utils/constants';
 import {
   listProviders,
   connectProvider,
@@ -10,6 +11,8 @@ import {
 import ApiKeyDetectInput from '../ui/ApiKeyDetectInput';
 import type { DetectedProvider } from '../ui/ApiKeyDetectInput';
 import type { Zone, DeskType, DeskAssignment } from '../../types';
+import { validateName } from '../../utils/profanityFilter';
+import { ChevronDown } from 'lucide-react';
 import './HireWizard.css';
 
 const DESK_OPTIONS: { key: DeskType; label: string; asset: string }[] = [
@@ -27,6 +30,10 @@ interface HireWizardProps {
     avatar: 'avatar1' | 'avatar2' | 'avatar3';
     deskName: string;
     deskType: DeskType;
+    deskCategory?: string;
+    deskCapabilities?: string[];
+    deskDescription?: string;
+    systemPrompt?: string;
   }) => void;
   onClose: () => void;
   onDeskRemoved: (deskId: string) => void;
@@ -46,6 +53,19 @@ interface HireWizardProps {
 
 type Mode = 'hire' | 'manage';
 
+// ── Tier badge helper ─────────────────────────────────────
+const tierColor = (tier: ModelTier): string => {
+  if (tier === 'premium') return '#ffd700';
+  if (tier === 'balanced') return '#667eea';
+  return '#1dd1a1';
+};
+
+const tierLabel = (tier: ModelTier): string => {
+  if (tier === 'premium') return 'Premium';
+  if (tier === 'balanced') return 'Balanced';
+  return 'Budget';
+};
+
 const HireWizard: React.FC<HireWizardProps> = ({
   desks,
   deskAssignments,
@@ -57,29 +77,29 @@ const HireWizard: React.FC<HireWizardProps> = ({
   preloadedProvider,
 }) => {
   const [mode, setMode] = useState<Mode>('hire');
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Provider connections from backend
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
   const [loadingConnections, setLoadingConnections] = useState(true);
 
-  // Step 1 — provider selection (existing connection or auto-detect)
+  // Step 1 — archetype selection
+  const [selectedArchetype, setSelectedArchetype] = useState<RoleArchetype | null>(null);
+
+  // Step 2 — provider + model
   const [useExisting, setUseExisting] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState('');
   const [detectedResult, setDetectedResult] = useState<DetectedProvider | null>(null);
   const [detectedModels, setDetectedModels] = useState<ProviderModel[]>([]);
   const [savingDetected, setSavingDetected] = useState(false);
-
-  // Step 2
   const [model, setModel] = useState('');
 
-  // Step 3
+  // Step 3 — personalize
   const [agentName, setAgentName] = useState('');
+  const [agentNameError, setAgentNameError] = useState('');
   const [avatar, setAvatar] = useState<'avatar1' | 'avatar2' | 'avatar3'>('avatar1');
-
-  // Step 4
-  const [deskName, setDeskName] = useState('');
-  const [deskType, setDeskType] = useState<DeskType>('mini');
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [showPersonality, setShowPersonality] = useState(false);
 
   // Manage tab state
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
@@ -96,6 +116,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
   const [editingDeskId, setEditingDeskId] = useState<string | null>(null);
   const [editDeskName, setEditDeskName] = useState('');
   const [editAgentName, setEditAgentName] = useState('');
+  const [editNameError, setEditNameError] = useState('');
   const [editAvatar, setEditAvatar] = useState<'avatar1' | 'avatar2' | 'avatar3'>('avatar1');
   const [editModel, setEditModel] = useState('');
   const [editDeskType, setEditDeskType] = useState<DeskType>('mini');
@@ -108,7 +129,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
     loadConnections();
   }, []);
 
-  // Handle pre-loaded provider from onboarding — auto-save and skip to Step 2
+  // Handle pre-loaded provider from onboarding — auto-save and skip to model selection
   useEffect(() => {
     if (!preloadedProvider) return;
 
@@ -119,7 +140,6 @@ const HireWizard: React.FC<HireWizardProps> = ({
         setProviderWarnings(prev => ({ ...prev, [preloadedProvider.provider]: preloadedProvider.warning! }));
       }
 
-      // Save connection (may already exist from onboarding, connectProvider is idempotent)
       try {
         const saved = await connectProvider(preloadedProvider.provider, preloadedProvider.apiKey, preloadedProvider.warning);
         setConnections(prev => {
@@ -129,10 +149,11 @@ const HireWizard: React.FC<HireWizardProps> = ({
         setUseExisting(true);
         setSelectedConnection(saved.id);
       } catch {
-        // Still advance — user can pick from existing connections if save fails
+        // Still advance
       }
 
-      // Jump to Step 2 (model selection)
+      // Jump to Step 2 (model selection) — archetype defaults to general
+      setSelectedArchetype(ROLE_ARCHETYPES.find(a => a.id === 'general') || ROLE_ARCHETYPES[5]);
       setStep(2);
     };
 
@@ -146,7 +167,6 @@ const HireWizard: React.FC<HireWizardProps> = ({
       const active = result.filter(c => c.isConnected);
       setConnections(active);
 
-      // Load persisted warnings from the database
       const warnings: Record<string, string> = {};
       for (const conn of active) {
         if (conn.warning) {
@@ -157,13 +177,12 @@ const HireWizard: React.FC<HireWizardProps> = ({
         setProviderWarnings(prev => ({ ...prev, ...warnings }));
       }
     } catch {
-      // Silently fail — user will see empty connections
+      // Silently fail
     } finally {
       setLoadingConnections(false);
     }
   };
 
-  // Auto-detect callback: save to backend (user must press Next to advance)
   const handleDetected = useCallback(async (result: DetectedProvider) => {
     setDetectedResult(result);
     setDetectedModels(result.models);
@@ -172,7 +191,6 @@ const HireWizard: React.FC<HireWizardProps> = ({
       setProviderWarnings(prev => ({ ...prev, [result.provider]: result.warning! }));
     }
 
-    // Save to backend immediately
     setSavingDetected(true);
     try {
       const saved = await connectProvider(result.provider, result.apiKey, result.warning);
@@ -183,7 +201,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
       setUseExisting(true);
       setSelectedConnection(saved.id);
     } catch {
-      // Connection saved in detect, just couldn't persist — user can retry
+      // Connection saved in detect, just couldn't persist
     } finally {
       setSavingDetected(false);
     }
@@ -218,12 +236,10 @@ const HireWizard: React.FC<HireWizardProps> = ({
     }
   };
 
-  // ── Disconnect with cascade confirmation ──────────────────
   const handleDisconnectClick = (credId: string, providerId: string) => {
     const provInfo = PROVIDERS_LIST.find(p => p.id === providerId);
     const providerModelIds = new Set(provInfo?.models || []);
 
-    // Find all desks whose primary model belongs to this provider
     const affected = deskAssignments
       .filter(a => providerModelIds.has(a.modelId))
       .map(a => {
@@ -248,15 +264,11 @@ const HireWizard: React.FC<HireWizardProps> = ({
     if (!disconnectConfirm) return;
     const { credId, providerId, affectedDesks } = disconnectConfirm;
 
-    // 1. Notify parent to cascade-delete affected desks
     if (affectedDesks.length > 0) {
       onProviderDisconnected(providerId, affectedDesks.map(d => d.deskId));
     }
 
-    // 2. Soft-delete the provider credential
     await handleDisconnect(credId);
-
-    // 3. Close confirmation
     setDisconnectConfirm(null);
   };
 
@@ -275,6 +287,14 @@ const HireWizard: React.FC<HireWizardProps> = ({
 
   const saveEdit = () => {
     if (!editingDeskId) return;
+    if (editDeskName.trim()) {
+      const deskIssue = validateName(editDeskName);
+      if (deskIssue) { setEditNameError(deskIssue); return; }
+    }
+    if (editAgentName.trim()) {
+      const nameIssue = validateName(editAgentName);
+      if (nameIssue) { setEditNameError(nameIssue); return; }
+    }
     onDeskEdited(editingDeskId, {
       deskName: editDeskName || undefined,
       agentName: editAgentName || undefined,
@@ -283,6 +303,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
       deskType: editDeskType,
     });
     setEditingDeskId(null);
+    setEditNameError('');
   };
 
   // All models from connected providers (for edit form dropdown)
@@ -293,28 +314,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
     );
   }, [connections]);
 
-  const isStepValid = useMemo(() => {
-    switch (step) {
-      case 1:
-        return useExisting ? !!selectedConnection : !!detectedResult?.provider;
-      case 2:
-        return !!model;
-      case 3:
-        return !!agentName.trim();
-      case 4:
-        return true;
-      default:
-        return false;
-    }
-  }, [step, useExisting, selectedConnection, detectedResult, model, agentName]);
-
-  const handleComplete = () => {
-    onComplete({ model, agentName, avatar, deskName, deskType });
-  };
-
-  const nextDeskNum = desks.filter(d => d.id?.startsWith('desk')).length + 1;
-
-  // Models for Step 2: use detected models if auto-detect was used, otherwise use static list
+  // ── Step 2: available models sorted by tier match ──────
   const providerModels = useMemo(() => {
     if (detectedModels.length > 0 && !useExisting) {
       return detectedModels.map(m => m.id);
@@ -325,17 +325,73 @@ const HireWizard: React.FC<HireWizardProps> = ({
     return PROVIDERS_LIST.find(p => p.id === provId)?.models || [];
   }, [useExisting, selectedConnection, detectedResult, detectedModels, connections]);
 
+  // Sort models: matching tier first, then by price ascending
+  const sortedModels = useMemo(() => {
+    const archetypeTier = selectedArchetype?.modelTier || 'budget';
+    return [...providerModels].sort((a, b) => {
+      const tierA = MODEL_FRIENDLY_LABELS[a]?.tier || 'balanced';
+      const tierB = MODEL_FRIENDLY_LABELS[b]?.tier || 'balanced';
+      const matchA = tierA === archetypeTier ? 0 : 1;
+      const matchB = tierB === archetypeTier ? 0 : 1;
+      if (matchA !== matchB) return matchA - matchB;
+      // Then sort by price
+      const priceA = MODEL_PRICING[a] ? MODEL_PRICING[a].input + MODEL_PRICING[a].output : 999;
+      const priceB = MODEL_PRICING[b] ? MODEL_PRICING[b].input + MODEL_PRICING[b].output : 999;
+      return priceA - priceB;
+    });
+  }, [providerModels, selectedArchetype]);
+
+  // Auto-select cheapest matching tier model when provider changes
+  useEffect(() => {
+    if (step !== 2 || sortedModels.length === 0 || model) return;
+    setModel(sortedModels[0]);
+  }, [step, sortedModels, model]);
+
+  const hasProvider = connections.length > 0;
+
+  const isStepValid = useMemo(() => {
+    switch (step) {
+      case 1:
+        return !!selectedArchetype;
+      case 2:
+        return !!model && (useExisting ? !!selectedConnection : !!detectedResult?.provider);
+      case 3:
+        return !!agentName.trim();
+      default:
+        return false;
+    }
+  }, [step, selectedArchetype, model, useExisting, selectedConnection, detectedResult, agentName]);
+
+  // When archetype is selected, pre-fill system prompt
+  useEffect(() => {
+    if (selectedArchetype) {
+      setSystemPrompt(selectedArchetype.defaultSystemPrompt);
+    }
+  }, [selectedArchetype]);
+
+  const handleComplete = () => {
+    const issue = validateName(agentName);
+    if (issue) { setAgentNameError(issue); return; }
+
+    const archetype = selectedArchetype!;
+    const deskName = `${archetype.title} Desk`;
+
+    onComplete({
+      model,
+      agentName,
+      avatar,
+      deskName,
+      deskType: 'mini',
+      deskCategory: archetype.category,
+      deskCapabilities: archetype.defaultCapabilities,
+      systemPrompt: systemPrompt || undefined,
+    });
+  };
+
   const connectedProviders = connections;
   const userDesks = desks.filter(d => d.id?.startsWith('desk'));
 
-  // Resolve provider name for summary
-  const resolvedProviderName = useMemo(() => {
-    if (useExisting) {
-      const conn = connections.find(c => c.id === selectedConnection);
-      return PROVIDERS_LIST.find(p => p.id === conn?.provider)?.name || conn?.provider || '';
-    }
-    return PROVIDERS_LIST.find(p => p.id === detectedResult?.provider)?.name || detectedResult?.provider || '';
-  }, [useExisting, selectedConnection, connections, detectedResult]);
+  const stepLabels = ['Pick Role', 'Connect AI', 'Personalize'];
 
   return (
     <div className="hire-wizard-overlay" onClick={onClose}>
@@ -364,124 +420,191 @@ const HireWizard: React.FC<HireWizardProps> = ({
         {mode === 'hire' && (
           <>
             <div className="hire-wizard-progress">
-              {[1, 2, 3, 4].map(s => (
+              {[1, 2, 3].map(s => (
                 <div key={s} className={`progress-step${s <= step ? ' active' : ''}`} />
               ))}
             </div>
 
             <div className="hire-wizard-step-label">
-              Step {step} of 4: {
-                step === 1 ? 'Connect Provider' :
-                step === 2 ? 'Select Model' :
-                step === 3 ? 'Name & Avatar' : 'Name Desk'
-              }
+              Step {step} of 3: {stepLabels[step - 1]}
             </div>
 
             <div className="hire-wizard-body">
-              {/* Step 1: Provider — existing connection or auto-detect */}
+              {/* ── Step 1: Pick Role ────────────────────────────── */}
               {step === 1 && (
                 <div>
-                  {loadingConnections && (
-                    <div className="wizard-hint" style={{ textAlign: 'center' }}>Loading providers...</div>
-                  )}
-
-                  {connectedProviders.length > 0 && (
-                    <div className="wizard-section">
-                      <label className="wizard-label">Use existing connection:</label>
-                      {connectedProviders.map(conn => {
-                        const hasWarning = !!providerWarnings[conn.provider];
-                        return (
-                          <div key={conn.id}
-                            className={`wizard-card${useExisting && selectedConnection === conn.id ? ' selected' : ''}`}
-                            onClick={() => {
-                              setUseExisting(true);
-                              setSelectedConnection(conn.id);
-                              setDetectedResult(null);
-                              setDetectedModels([]);
-                            }}>
-                            <strong>{PROVIDERS_LIST.find(p => p.id === conn.provider)?.name || conn.provider}</strong>
-                            {hasWarning ? (
-                              <span className="warning-badge">Low Credits</span>
-                            ) : (
-                              <span className="connected-badge">Connected</span>
-                            )}
-                            <div className="wizard-card-sub">{conn.apiKeyMasked}</div>
-                            {hasWarning && (
-                              <div className="provider-warning-msg">
-                                {providerWarnings[conn.provider]}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      <div className="wizard-divider">-- or connect a new provider --</div>
-                    </div>
-                  )}
-
-                  {/* Auto-detect key input */}
-                  <div style={{ marginTop: connectedProviders.length > 0 ? '8px' : '0' }}>
-                    <ApiKeyDetectInput
-                      onDetected={handleDetected}
-                      showHints={connectedProviders.length === 0}
-                      placeholder="Paste any API key — we'll detect the provider"
-                    />
-                    {savingDetected && (
-                      <div className="wizard-hint" style={{ textAlign: 'center', marginTop: '8px' }}>
-                        Saving connection...
-                      </div>
-                    )}
+                  <p className="wizard-hint">Who do you want to hire?</p>
+                  <div className="archetype-grid">
+                    {ROLE_ARCHETYPES.map(arch => (
+                      <button
+                        key={arch.id}
+                        type="button"
+                        className={`archetype-card${selectedArchetype?.id === arch.id ? ' selected' : ''}`}
+                        onClick={() => setSelectedArchetype(arch)}>
+                        <span className="archetype-icon">{arch.icon}</span>
+                        <span className="archetype-title">{arch.title}</span>
+                        <span className="archetype-tagline">{arch.tagline}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {/* Step 2: Model Selection */}
+              {/* ── Step 2: Connect AI + Pick Model ──────────────── */}
               {step === 2 && (
                 <div>
-                  <p className="wizard-hint">Choose an AI model for this desk:</p>
-                  {providerModels.map(modelId => {
-                    const info = AVAILABLE_MODELS.find(m => m.id === modelId);
-                    // Check detected models for friendly name if not in AVAILABLE_MODELS
-                    const detectedName = detectedModels.find(m => m.id === modelId)?.name;
-                    const pricing = MODEL_PRICING[modelId];
-                    return (
-                      <div key={modelId}
-                        className={`wizard-card${model === modelId ? ' selected' : ''}`}
-                        onClick={() => setModel(modelId)}>
-                        <div className="wizard-card-row">
-                          <strong>{info?.name || detectedName || modelId}</strong>
-                          {pricing && (
-                            <span className="wizard-card-price">
-                              ${(pricing.input * 1000).toFixed(3)}/1K in | ${(pricing.output * 1000).toFixed(3)}/1K out
-                            </span>
-                          )}
+                  {/* Provider section: show if no provider connected */}
+                  {!hasProvider && (
+                    <div style={{ marginBottom: '20px' }}>
+                      <p className="wizard-hint">Connect an AI provider to get started:</p>
+                      <ApiKeyDetectInput
+                        onDetected={handleDetected}
+                        showHints
+                        placeholder="Paste any API key \u2014 we'll detect the provider"
+                      />
+                      {savingDetected && (
+                        <div className="wizard-hint" style={{ textAlign: 'center', marginTop: '8px' }}>
+                          Saving connection...
                         </div>
-                        {info && <div className="wizard-card-provider" style={{ color: info.color }}>{info.provider}</div>}
-                      </div>
-                    );
-                  })}
+                      )}
+                    </div>
+                  )}
+
+                  {/* Provider connected: show existing connections + model picker */}
+                  {hasProvider && (
+                    <>
+                      {/* Compact connected provider indicator */}
+                      {connectedProviders.length > 0 && !useExisting && (
+                        <div style={{ marginBottom: '12px' }}>
+                          {connectedProviders.map(conn => {
+                            const hasWarning = !!providerWarnings[conn.provider];
+                            return (
+                              <div key={conn.id}
+                                className={`wizard-card compact-provider${useExisting && selectedConnection === conn.id ? ' selected' : ''}`}
+                                onClick={() => {
+                                  setUseExisting(true);
+                                  setSelectedConnection(conn.id);
+                                  setDetectedResult(null);
+                                  setDetectedModels([]);
+                                  setModel('');
+                                }}>
+                                <strong>{PROVIDERS_LIST.find(p => p.id === conn.provider)?.name || conn.provider}</strong>
+                                {hasWarning ? (
+                                  <span className="warning-badge">Low Credits</span>
+                                ) : (
+                                  <span className="connected-badge">Connected</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {connectedProviders.length > 0 && useExisting && !selectedConnection && (
+                        <div style={{ marginBottom: '12px' }}>
+                          <label className="wizard-label">Use existing connection:</label>
+                          {connectedProviders.map(conn => {
+                            const hasWarning = !!providerWarnings[conn.provider];
+                            return (
+                              <div key={conn.id}
+                                className={`wizard-card${selectedConnection === conn.id ? ' selected' : ''}`}
+                                onClick={() => {
+                                  setSelectedConnection(conn.id);
+                                  setModel('');
+                                }}>
+                                <strong>{PROVIDERS_LIST.find(p => p.id === conn.provider)?.name || conn.provider}</strong>
+                                {hasWarning ? (
+                                  <span className="warning-badge">Low Credits</span>
+                                ) : (
+                                  <span className="connected-badge">Connected</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Model selection */}
+                      {(useExisting && selectedConnection) || detectedResult ? (
+                        <div>
+                          <p className="wizard-hint">Pick a model for your {selectedArchetype?.title || 'agent'}:</p>
+                          <div className="model-grid">
+                            {sortedModels.map(modelId => {
+                              const info = AVAILABLE_MODELS.find(m => m.id === modelId);
+                              const label = MODEL_FRIENDLY_LABELS[modelId];
+                              const pricing = MODEL_PRICING[modelId];
+                              const isRecommended = label?.tier === selectedArchetype?.modelTier;
+                              return (
+                                <div key={modelId}
+                                  className={`model-card${model === modelId ? ' selected' : ''}${isRecommended ? ' recommended' : ''}`}
+                                  onClick={() => setModel(modelId)}>
+                                  <div className="model-card-top">
+                                    <span className="model-card-name">{info?.name || modelId}</span>
+                                    {label && (
+                                      <span className="model-tier-badge" style={{ color: tierColor(label.tier), borderColor: tierColor(label.tier) }}>
+                                        {tierLabel(label.tier)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="model-card-tagline">{label?.tagline || ''}</div>
+                                  {pricing && (
+                                    <div className="model-card-price">
+                                      ${(pricing.input * 1_000_000).toFixed(2)}/M in &middot; ${(pricing.output * 1_000_000).toFixed(2)}/M out
+                                    </div>
+                                  )}
+                                  {isRecommended && <div className="model-recommended-tag">Recommended</div>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* Add another provider */}
+                      {!detectedResult && connectedProviders.length > 0 && (
+                        <div style={{ marginTop: '16px' }}>
+                          <div className="wizard-divider">-- or connect a new provider --</div>
+                          <ApiKeyDetectInput
+                            onDetected={handleDetected}
+                            compact
+                            placeholder="Paste any API key to add a provider"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {loadingConnections && !hasProvider && (
+                    <div className="wizard-hint" style={{ textAlign: 'center' }}>Loading providers...</div>
+                  )}
                 </div>
               )}
 
-              {/* Step 3: Agent Name + Avatar */}
+              {/* ── Step 3: Personalize ──────────────────────────── */}
               {step === 3 && (
                 <div>
                   <div className="wizard-field">
-                    <label className="wizard-label">Agent Name</label>
+                    <label className="wizard-label">Name your agent</label>
                     <input
                       type="text"
                       className="wizard-input"
                       value={agentName}
-                      onChange={e => setAgentName(e.target.value)}
-                      placeholder="e.g., Research Bot, Code Helper"
-                      maxLength={24}
+                      onChange={e => { setAgentName(e.target.value); setAgentNameError(''); }}
+                      placeholder={selectedArchetype?.suggestedNames[Math.floor(Math.random() * selectedArchetype.suggestedNames.length)] || 'Agent name'}
+                      maxLength={30}
                       autoFocus
                     />
+                    {agentNameError && (
+                      <p style={{ color: '#ff6b6b', fontSize: 12, margin: '6px 0 0' }}>{agentNameError}</p>
+                    )}
                   </div>
+
                   <div className="wizard-field">
                     <label className="wizard-label">Pick Avatar</label>
                     <div className="sprite-picker">
                       {(['avatar1', 'avatar2', 'avatar3'] as const).map((key, i) => (
                         <button key={key}
+                          type="button"
                           className={`sprite-option${avatar === key ? ' selected' : ''}`}
                           onClick={() => setAvatar(key)}>
                           <img
@@ -494,60 +617,46 @@ const HireWizard: React.FC<HireWizardProps> = ({
                       ))}
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* Step 4: Desk Name + Desk Style + Summary */}
-              {step === 4 && (
-                <div>
+                  {/* Collapsible personality editor */}
                   <div className="wizard-field">
-                    <label className="wizard-label">Desk Name</label>
-                    <input
-                      type="text"
-                      className="wizard-input"
-                      value={deskName}
-                      onChange={e => setDeskName(e.target.value)}
-                      placeholder="e.g., Research Desk, Code Lab"
-                      maxLength={24}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="wizard-field">
-                    <label className="wizard-label">Pick Desk Style</label>
-                    <div className="desk-picker">
-                      {DESK_OPTIONS.map(opt => (
-                        <button key={opt.key}
-                          type="button"
-                          className={`desk-option${deskType === opt.key ? ' selected' : ''}`}
-                          onClick={() => setDeskType(opt.key)}>
-                          <img
-                            src={opt.asset}
-                            alt={opt.label}
-                            style={{ imageRendering: 'pixelated', width: '100%', height: 'auto' }}
-                          />
-                          <span className="desk-option-label">{opt.label}</span>
-                        </button>
-                      ))}
-                    </div>
+                    <button
+                      type="button"
+                      className="personality-toggle"
+                      onClick={() => setShowPersonality(!showPersonality)}>
+                      <ChevronDown
+                        size={14}
+                        style={{
+                          transform: showPersonality ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s',
+                        }}
+                      />
+                      <span>Edit personality</span>
+                    </button>
+                    {showPersonality && (
+                      <textarea
+                        className="wizard-input wizard-textarea personality-textarea"
+                        value={systemPrompt}
+                        onChange={e => setSystemPrompt(e.target.value)}
+                        placeholder="Describe this agent's personality and approach..."
+                        maxLength={2000}
+                        rows={4}
+                      />
+                    )}
                   </div>
 
+                  {/* Summary */}
                   <div className="wizard-summary">
                     <div className="wizard-summary-title">Summary</div>
                     <div className="wizard-summary-grid">
-                      <div><span className="wizard-summary-label">Provider: </span>
-                        <span className="wizard-summary-value">{resolvedProviderName}</span>
+                      <div><span className="wizard-summary-label">Role: </span>
+                        <span className="wizard-summary-value">{selectedArchetype?.icon} {selectedArchetype?.title}</span>
                       </div>
                       <div><span className="wizard-summary-label">Model: </span>
                         <span className="wizard-summary-value">{AVAILABLE_MODELS.find(m => m.id === model)?.name || model}</span>
                       </div>
                       <div><span className="wizard-summary-label">Agent: </span>
-                        <span className="wizard-summary-value">{agentName}</span>
-                      </div>
-                      <div><span className="wizard-summary-label">Desk: </span>
-                        <span className="wizard-summary-value">{deskName || `Desk ${nextDeskNum}`}</span>
-                      </div>
-                      <div><span className="wizard-summary-label">Style: </span>
-                        <span className="wizard-summary-value">{DESK_OPTIONS.find(o => o.key === deskType)?.label || 'Starter'}</span>
+                        <span className="wizard-summary-value">{agentName || '(enter name above)'}</span>
                       </div>
                     </div>
                   </div>
@@ -559,28 +668,36 @@ const HireWizard: React.FC<HireWizardProps> = ({
             <div className="hire-wizard-nav">
               <div>
                 {step > 1 && (
-                  <button className="wizard-btn secondary" onClick={() => setStep((step - 1) as 1 | 2 | 3 | 4)}>
+                  <button className="wizard-btn secondary" onClick={() => setStep((step - 1) as 1 | 2 | 3)}>
                     Back
                   </button>
                 )}
               </div>
               <div>
-                {step === 1 ? (
+                {step < 3 ? (
                   <button
                     className={`wizard-btn primary${!isStepValid ? ' disabled' : ''}`}
-                    onClick={() => setStep(2)}
+                    onClick={() => {
+                      if (step === 1 && selectedArchetype) {
+                        // Auto-select provider if only one
+                        if (connections.length === 1 && !useExisting) {
+                          setUseExisting(true);
+                          setSelectedConnection(connections[0].id);
+                        } else if (connections.length > 0 && !useExisting) {
+                          setUseExisting(true);
+                          setSelectedConnection(connections[0].id);
+                        }
+                      }
+                      setStep((step + 1) as 1 | 2 | 3);
+                    }}
                     disabled={!isStepValid || savingDetected}>
                     {savingDetected ? 'Saving...' : 'Next'}
                   </button>
-                ) : step < 4 ? (
-                  <button
-                    className={`wizard-btn primary${!isStepValid ? ' disabled' : ''}`}
-                    onClick={() => setStep((step + 1) as 1 | 2 | 3 | 4)}
-                    disabled={!isStepValid}>
-                    Next
-                  </button>
                 ) : (
-                  <button className="wizard-btn confirm" onClick={handleComplete}>
+                  <button
+                    className={`wizard-btn confirm${!isStepValid ? ' disabled' : ''}`}
+                    onClick={handleComplete}
+                    disabled={!isStepValid}>
                     Hire Agent
                   </button>
                 )}
@@ -700,7 +817,7 @@ const HireWizard: React.FC<HireWizardProps> = ({
                             type="text"
                             className="wizard-input"
                             value={editDeskName}
-                            onChange={e => setEditDeskName(e.target.value)}
+                            onChange={e => { setEditDeskName(e.target.value); setEditNameError(''); }}
                             placeholder="Desk name"
                             maxLength={24}
                             autoFocus
@@ -713,10 +830,13 @@ const HireWizard: React.FC<HireWizardProps> = ({
                             type="text"
                             className="wizard-input"
                             value={editAgentName}
-                            onChange={e => setEditAgentName(e.target.value)}
+                            onChange={e => { setEditAgentName(e.target.value); setEditNameError(''); }}
                             placeholder="Agent name"
-                            maxLength={24}
+                            maxLength={30}
                           />
+                          {editNameError && (
+                            <p style={{ color: '#ff6b6b', fontSize: 12, margin: '6px 0 0' }}>{editNameError}</p>
+                          )}
                         </div>
 
                         <div className="wizard-field">

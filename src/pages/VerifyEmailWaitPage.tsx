@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { resendVerification } from '../api/auth';
 import './auth.css';
@@ -56,67 +56,53 @@ export function VerifyEmailWaitPage() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card" style={{ textAlign: 'center', maxWidth: 440 }}>
-        <div style={{ fontSize: 42, marginBottom: 16, color: '#667eea', fontWeight: 300 }}>Email Verification</div>
-        <h1 className="auth-title">Check Your Email</h1>
-        <p style={{ color: '#aaa', lineHeight: 1.6, marginBottom: 24 }}>
-          We sent a verification link to{' '}
-          <strong style={{ color: '#667eea' }}>{user?.email ?? 'your email'}</strong>.
-          <br />
-          Please click the link to verify your account before continuing.
-        </p>
+      <div className="auth-container">
+        <div className="auth-card" style={{ textAlign: 'center' }}>
+          <Link to="/" className="auth-logo-link">
+            <img
+              src="/assets/office-logo.png"
+              alt="Agent Desk"
+              className="auth-logo"
+            />
+          </Link>
 
-        {sent && (
-          <p style={{ color: '#4ade80', fontSize: 14, marginBottom: 16 }}>
-            Verification email resent!
+          <div className="auth-icon">&#9993;</div>
+          <h1 className="auth-title">Check Your Email</h1>
+          <p className="auth-description">
+            We sent a verification link to{' '}
+            <strong>{user?.email ?? 'your email'}</strong>.
+            <br />
+            Please click the link to verify your account before continuing.
           </p>
-        )}
-        {error && (
-          <p style={{ color: '#ff6b6b', fontSize: 14, marginBottom: 16 }}>
-            {error}
-          </p>
-        )}
 
-        <button
-          className="auth-submit"
-          onClick={handleResend}
-          disabled={sending}
-          style={{ marginBottom: 12, width: '100%' }}
-        >
-          {sending ? 'Sending...' : 'Resend Verification Email'}
-        </button>
+          {sent && <p className="auth-success-text">Verification email resent!</p>}
+          {error && <p className="auth-error-text">{error}</p>}
 
-        <button
-          onClick={handleCheckVerification}
-          disabled={checking}
-          style={{
-            width: '100%',
-            padding: '12px',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid #333',
-            borderRadius: 8,
-            color: '#aaa',
-            cursor: 'pointer',
-            marginBottom: 12,
-          }}
-        >
-          {checking ? 'Checking…' : "I've Verified — Let Me In"}
-        </button>
+          <div className="auth-actions">
+            <button
+              className="auth-button"
+              onClick={handleResend}
+              disabled={sending}
+            >
+              {sending ? 'Sending...' : 'Resend Verification Email'}
+            </button>
 
-        <button
-          onClick={handleLogout}
-          style={{
-            width: '100%',
-            padding: '10px',
-            background: 'transparent',
-            border: 'none',
-            color: '#666',
-            cursor: 'pointer',
-            fontSize: 13,
-          }}
-        >
-          Sign out and use a different account
-        </button>
+            <button
+              className="auth-button-secondary"
+              onClick={handleCheckVerification}
+              disabled={checking}
+            >
+              {checking ? 'Checking...' : "I've Verified \u2014 Let Me In"}
+            </button>
+
+            <button
+              className="auth-button-ghost"
+              onClick={handleLogout}
+            >
+              Sign out and use a different account
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

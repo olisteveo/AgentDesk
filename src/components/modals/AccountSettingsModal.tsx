@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { deleteAccount, selectPlan, changePassword, changeEmail } from '../../api/auth';
-import { Check, Zap, Eye, EyeOff } from 'lucide-react';
+import { deleteAccount, changePassword, changeEmail } from '../../api/auth';
+import { createCheckoutSession, createPortalSession } from '../../api/stripe';
+import { validateName } from '../../utils/profanityFilter';
+import { apiRequest } from '../../api/client';
+import { getTeam, updateTeam } from '../../api/team';
+import type { RoutingConfig } from '../../api/team';
+import { Check, Zap, Eye, EyeOff, ExternalLink, Sparkles } from 'lucide-react';
 
 interface AccountSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'account' | 'billing';
+  initialTab?: 'account' | 'billing' | 'routing';
 }
 
-type Tab = 'account' | 'billing';
+type Tab = 'account' | 'billing' | 'routing';
 
 // Inline styles (keeps the modal self-contained)
 const s = {
@@ -65,10 +70,23 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
   const [emailDevLink, setEmailDevLink] = useState('');
   const [changingEmail, setChangingEmail] = useState(false);
 
+  // Display name state
+  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [nameError, setNameError] = useState('');
+  const [nameSuccess, setNameSuccess] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
   // Billing state
   const [changingPlan, setChangingPlan] = useState(false);
   const [planError, setPlanError] = useState('');
   const [planSuccess, setPlanSuccess] = useState('');
+
+  // Routing config state (Enterprise only)
+  const [routingConfig, setRoutingConfig] = useState<RoutingConfig>({});
+  const [routingConfigLoaded, setRoutingConfigLoaded] = useState(false);
+  const [savingRouting, setSavingRouting] = useState(false);
+  const [routingSuccess, setRoutingSuccess] = useState('');
+  const [routingError, setRoutingError] = useState('');
 
   // Reset forms when modal closes (component stays mounted)
   useEffect(() => {
@@ -90,8 +108,37 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
       setEmailError('');
       setEmailSuccess('');
       setEmailDevLink('');
+      setNameError('');
+      setNameSuccess('');
+    } else {
+      // Sync display name when modal opens
+      setDisplayName(user?.displayName ?? '');
     }
-  }, [isOpen]);
+  }, [isOpen, user?.displayName]);
+
+  // Lazy-load routing config when routing tab is opened
+  useEffect(() => {
+    if (tab === 'routing' && !routingConfigLoaded && isOpen) {
+      getTeam().then(team => {
+        setRoutingConfig(team.routing_config || {});
+        setRoutingConfigLoaded(true);
+      }).catch(() => { /* ignore */ });
+    }
+  }, [tab, routingConfigLoaded, isOpen]);
+
+  const handleSaveRoutingConfig = async () => {
+    setSavingRouting(true);
+    setRoutingError('');
+    setRoutingSuccess('');
+    try {
+      await updateTeam({ routingConfig });
+      setRoutingSuccess('Routing configuration saved successfully.');
+    } catch (err) {
+      setRoutingError(err instanceof Error ? err.message : 'Failed to save routing config');
+    } finally {
+      setSavingRouting(false);
+    }
+  };
 
   const handleLogout = async () => {
     onClose();
@@ -126,6 +173,18 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
     }
     if (newPassword.length < 8) {
       setPasswordError('New password must be at least 8 characters');
+      return;
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      setPasswordError('Must include an uppercase letter');
+      return;
+    }
+    if (!/[a-z]/.test(newPassword)) {
+      setPasswordError('Must include a lowercase letter');
+      return;
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      setPasswordError('Must include a number');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -185,20 +244,65 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
     }
   };
 
-  const handleChangePlan = async (newPlan: 'free' | 'pro') => {
-    if (newPlan === user?.plan) return;
+  const handleSaveDisplayName = async () => {
+    setNameError('');
+    setNameSuccess('');
+
+    const trimmed = displayName.trim();
+    const nameIssue = validateName(trimmed);
+    if (nameIssue) {
+      setNameError(nameIssue);
+      return;
+    }
+
+    if (trimmed === user?.displayName) {
+      setNameSuccess('No changes to save');
+      setTimeout(() => setNameSuccess(''), 2000);
+      return;
+    }
+
+    setSavingName(true);
+    try {
+      await apiRequest('/api/users/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ displayName: trimmed }),
+      });
+      updateUser({ displayName: trimmed });
+      setNameSuccess('Name updated');
+      setTimeout(() => setNameSuccess(''), 2000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update name';
+      setNameError(msg);
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleUpgradeToPro = async () => {
     setChangingPlan(true);
     setPlanError('');
     setPlanSuccess('');
 
     try {
-      const result = await selectPlan(newPlan);
-      updateUser({ plan: result.plan });
-      setPlanSuccess(`Switched to ${result.plan.charAt(0).toUpperCase() + result.plan.slice(1)} plan`);
+      const { checkoutUrl } = await createCheckoutSession('pro', 'upgrade');
+      window.location.href = checkoutUrl;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to change plan';
+      const msg = err instanceof Error ? err.message : 'Failed to start checkout';
       setPlanError(msg);
-    } finally {
+      setChangingPlan(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    setChangingPlan(true);
+    setPlanError('');
+
+    try {
+      const { portalUrl } = await createPortalSession();
+      window.location.href = portalUrl;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to open billing portal';
+      setPlanError(msg);
       setChangingPlan(false);
     }
   };
@@ -207,6 +311,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
 
   const currentPlan = user?.plan ?? 'free';
   const isPro = currentPlan === 'pro';
+  const isEnterprise = currentPlan === 'enterprise';
+  const tabs: Tab[] = isEnterprise ? ['account', 'billing', 'routing'] : ['account', 'billing'];
 
   return (
     <div className="task-form-overlay" onClick={onClose}>
@@ -219,7 +325,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, marginBottom: 24, borderBottom: '1px solid #333' }}>
-          {(['account', 'billing'] as Tab[]).map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -248,7 +354,31 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
           <>
             <div style={{ marginBottom: 20 }}>
               <label style={s.label}>Display Name</label>
-              <input type="text" defaultValue={user?.displayName ?? 'You'} style={s.input} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => { setDisplayName(e.target.value); setNameError(''); setNameSuccess(''); }}
+                  maxLength={30}
+                  style={{ ...s.input, flex: 1 }}
+                />
+                {displayName.trim() !== (user?.displayName ?? '') && (
+                  <button
+                    onClick={handleSaveDisplayName}
+                    disabled={savingName}
+                    style={{
+                      padding: '12px 16px', background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                      border: 'none', borderRadius: 6,
+                      color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
+                      fontSize: 13, whiteSpace: 'nowrap', fontWeight: 600,
+                    }}
+                  >
+                    {savingName ? '...' : 'Save'}
+                  </button>
+                )}
+              </div>
+              {nameError && <p style={{ color: '#ff6b6b', fontSize: 12, margin: '6px 0 0' }}>{nameError}</p>}
+              {nameSuccess && <p style={{ color: '#4ade80', fontSize: 12, margin: '6px 0 0' }}>{nameSuccess}</p>}
             </div>
 
             {/* Email — hidden for Google sign-in users, editable for password users */}
@@ -373,13 +503,14 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
 
             <div style={{ marginBottom: 20 }}>
               <label style={s.label}>Timezone</label>
-              <select style={s.input}>
-                <option>UTC</option>
-                <option>GMT+8 (Asia/Shanghai)</option>
-                <option>GMT+0 (London)</option>
-                <option>GMT-5 (New York)</option>
-                <option>GMT-8 (Los Angeles)</option>
-              </select>
+              <div style={{
+                ...s.input,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                color: '#ccc', cursor: 'default',
+              }}>
+                <span>{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+                <span style={{ color: '#555', fontSize: 11 }}>Auto-detected</span>
+              </div>
             </div>
 
             {/* Change Password (only for users with a password -- not Google OAuth) */}
@@ -437,7 +568,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                   <div style={{ position: 'relative', marginBottom: 8 }}>
                     <input
                       type={showNewPw ? 'text' : 'password'}
-                      placeholder="New password (min. 8 characters)"
+                      placeholder="Min 8 chars, uppercase, lowercase & number"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       autoComplete="new-password"
@@ -680,9 +811,16 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     </li>
                   ))}
                 </ul>
-                {isPro ? (
+                {isPro && user?.stripeCancelAt ? (
+                  <div style={{
+                    width: '100%', padding: 8, fontSize: 12, fontWeight: 600,
+                    textAlign: 'center', color: '#ffab00',
+                  }}>
+                    Canceling soon
+                  </div>
+                ) : isPro ? (
                   <button
-                    onClick={() => handleChangePlan('free')}
+                    onClick={handleManageSubscription}
                     disabled={changingPlan}
                     style={{
                       width: '100%', padding: 8, fontSize: 12, fontWeight: 600,
@@ -710,7 +848,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
               }}>
                 <h4 style={{ color: '#fff', fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>Pro</h4>
                 <p style={{ color: '#fff', fontSize: 22, fontWeight: 700, margin: '0 0 10px' }}>
-                  $29<span style={{ color: '#666', fontSize: 12, fontWeight: 400 }}> /month</span>
+                  $19<span style={{ color: '#666', fontSize: 12, fontWeight: 400 }}> /month</span>
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 14px' }}>
                   {['Up to 5 users', '6 desks', '6 providers', 'Advanced tasks', 'Full analytics', 'Meeting room', 'Whiteboard', 'Priority support'].map((f) => (
@@ -721,7 +859,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                 </ul>
                 {!isPro ? (
                   <button
-                    onClick={() => handleChangePlan('pro')}
+                    onClick={handleUpgradeToPro}
                     disabled={changingPlan}
                     style={{
                       width: '100%', padding: 8, fontSize: 12, fontWeight: 600,
@@ -733,12 +871,18 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     {changingPlan ? '...' : 'Upgrade'}
                   </button>
                 ) : (
-                  <div style={{
-                    width: '100%', padding: 8, fontSize: 12, fontWeight: 600,
-                    textAlign: 'center', color: '#667eea',
-                  }}>
-                    Current Plan
-                  </div>
+                  <button
+                    onClick={handleManageSubscription}
+                    disabled={changingPlan}
+                    style={{
+                      width: '100%', padding: 8, fontSize: 12, fontWeight: 600,
+                      background: 'rgba(102,126,234,0.15)', border: '1px solid rgba(102,126,234,0.3)',
+                      borderRadius: 6, color: '#667eea', cursor: 'pointer', fontFamily: 'inherit',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}
+                  >
+                    {changingPlan ? '...' : <><ExternalLink size={12} /> Manage Subscription</>}
+                  </button>
                 )}
               </div>
             </div>
@@ -750,17 +894,207 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
               <p style={{ color: '#4ade80', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>{planSuccess}</p>
             )}
 
-            {/* Payment method placeholder */}
-            <div style={{
-              background: 'rgba(255,255,255,0.02)', border: '1px solid #222',
-              borderRadius: 10, padding: 20, textAlign: 'center',
-            }}>
-              <p style={{ color: '#555', fontSize: 13, margin: 0 }}>
-                Payment method management coming soon.
-              </p>
-              <p style={{ color: '#444', fontSize: 12, margin: '6px 0 0' }}>
-                Stripe integration will be added in a future update.
-              </p>
+            {/* Subscription management */}
+            {isPro && user?.stripeCancelAt && (
+              <div style={{
+                background: 'rgba(255,171,0,0.08)', border: '1px solid rgba(255,171,0,0.25)',
+                borderRadius: 10, padding: 16, textAlign: 'center', marginBottom: 12,
+              }}>
+                <p style={{ color: '#ffab00', fontSize: 13, margin: 0, fontWeight: 500 }}>
+                  Your Pro plan is set to cancel on{' '}
+                  {new Date(user.stripeCancelAt).toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                  })}
+                </p>
+                <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0' }}>
+                  You'll keep Pro access until then. Re-subscribe anytime from the billing portal.
+                </p>
+              </div>
+            )}
+
+            {isPro && (
+              <div style={{
+                background: 'rgba(255,255,255,0.02)', border: '1px solid #222',
+                borderRadius: 10, padding: 16, textAlign: 'center',
+              }}>
+                <p style={{ color: '#888', fontSize: 13, margin: '0 0 12px' }}>
+                  Update payment method, view invoices, or cancel your subscription.
+                </p>
+                <button
+                  onClick={handleManageSubscription}
+                  disabled={changingPlan}
+                  style={{
+                    padding: '8px 20px', fontSize: 13, fontWeight: 600,
+                    background: 'rgba(102,126,234,0.12)', border: '1px solid rgba(102,126,234,0.3)',
+                    borderRadius: 6, color: '#667eea', cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <ExternalLink size={13} /> Open Billing Portal
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ═══ ROUTING TAB (Enterprise only) ═══ */}
+        {tab === 'routing' && isEnterprise && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <Sparkles size={18} style={{ color: '#ffa502' }} />
+              <h3 style={{ margin: 0, fontSize: 16 }}>Smart Routing Configuration</h3>
+            </div>
+            <p style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
+              Configure how the AI routing analysis handles proposed optimizations.
+              Auto-approved rules are subject to safety guardrails.
+            </p>
+
+            {/* Auto-approve toggle */}
+            <div style={{ ...s.divider, borderTop: 'none', paddingTop: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <label style={{ ...s.label, marginBottom: 2, fontWeight: 600, color: '#ccc' }}>
+                    Enable Auto-Approval
+                  </label>
+                  <span style={{ fontSize: 11, color: '#666' }}>
+                    Automatically activate safe routing rules from analysis
+                  </span>
+                </div>
+                <button
+                  onClick={() => setRoutingConfig(c => ({ ...c, auto_approve: !c.auto_approve }))}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                    background: routingConfig.auto_approve ? '#1dd1a1' : '#444',
+                    transition: 'background 0.2s', position: 'relative',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 2, left: routingConfig.auto_approve ? 22 : 2,
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Confidence threshold */}
+            <div style={s.divider}>
+              <label style={s.label}>
+                Minimum Confidence Threshold: <strong style={{ color: '#fff' }}>
+                  {Math.round((routingConfig.auto_approve_confidence_threshold ?? 0.8) * 100)}%
+                </strong>
+              </label>
+              <input
+                type="range"
+                min={70}
+                max={95}
+                step={5}
+                value={Math.round((routingConfig.auto_approve_confidence_threshold ?? 0.8) * 100)}
+                onChange={(e) => setRoutingConfig(c => ({
+                  ...c,
+                  auto_approve_confidence_threshold: parseInt(e.target.value) / 100,
+                }))}
+                style={{ width: '100%', accentColor: '#667eea' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#666', marginTop: 4 }}>
+                <span>70% (more rules)</span>
+                <span>95% (safer)</span>
+              </div>
+            </div>
+
+            {/* Optimization goal */}
+            <div style={s.divider}>
+              <label style={s.label}>Optimization Goal</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {(['quality', 'cost', 'balanced', 'speed'] as const).map(goal => (
+                  <button
+                    key={goal}
+                    onClick={() => setRoutingConfig(c => ({ ...c, optimization_goal: goal }))}
+                    style={{
+                      padding: '10px 12px', borderRadius: 8, border: '1px solid',
+                      borderColor: routingConfig.optimization_goal === goal ? '#667eea' : '#444',
+                      background: routingConfig.optimization_goal === goal ? 'rgba(102,126,234,0.12)' : 'rgba(0,0,0,0.3)',
+                      color: routingConfig.optimization_goal === goal ? '#667eea' : '#888',
+                      cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                      textTransform: 'capitalize', fontFamily: 'inherit',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {goal}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Auto-approve cost optimization rules */}
+            <div style={s.divider}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <label style={{ ...s.label, marginBottom: 2, fontWeight: 600, color: '#ccc' }}>
+                    Auto-Approve Cost Rules
+                  </label>
+                  <span style={{ fontSize: 11, color: '#666' }}>
+                    Allow auto-approval of model downgrade suggestions
+                  </span>
+                </div>
+                <button
+                  onClick={() => setRoutingConfig(c => ({ ...c, auto_approve_cost_rules: !c.auto_approve_cost_rules }))}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                    background: routingConfig.auto_approve_cost_rules ? '#1dd1a1' : '#444',
+                    transition: 'background 0.2s', position: 'relative',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 2, left: routingConfig.auto_approve_cost_rules ? 22 : 2,
+                    width: 20, height: 20, borderRadius: '50%', background: '#fff',
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Max cost savings percentage */}
+            <div style={s.divider}>
+              <label style={s.label}>
+                Max Cost Savings per Switch: <strong style={{ color: '#fff' }}>
+                  {routingConfig.max_auto_cost_savings_pct ?? 30}%
+                </strong>
+              </label>
+              <input
+                type="range"
+                min={10}
+                max={50}
+                step={5}
+                value={routingConfig.max_auto_cost_savings_pct ?? 30}
+                onChange={(e) => setRoutingConfig(c => ({
+                  ...c,
+                  max_auto_cost_savings_pct: parseInt(e.target.value),
+                }))}
+                style={{ width: '100%', accentColor: '#667eea' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#666', marginTop: 4 }}>
+                <span>10% (conservative)</span>
+                <span>50% (aggressive)</span>
+              </div>
+            </div>
+
+            {/* Save button */}
+            <div style={{ ...s.divider, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                onClick={handleSaveRoutingConfig}
+                disabled={savingRouting}
+                style={{
+                  padding: '10px 24px', fontSize: 13, fontWeight: 600,
+                  background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                  border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer',
+                  fontFamily: 'inherit', opacity: savingRouting ? 0.6 : 1,
+                }}
+              >
+                {savingRouting ? 'Saving...' : 'Save Configuration'}
+              </button>
+              {routingSuccess && <span style={{ color: '#1dd1a1', fontSize: 12 }}>{routingSuccess}</span>}
+              {routingError && <span style={{ color: '#ff6b6b', fontSize: 12 }}>{routingError}</span>}
             </div>
           </>
         )}

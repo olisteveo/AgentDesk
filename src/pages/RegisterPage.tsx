@@ -8,6 +8,7 @@ import { useState, type FormEvent, type ChangeEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
+import { containsProfanity } from '../utils/profanityFilter';
 import type { ApiError } from '../api/client';
 import './auth.css';
 
@@ -34,8 +35,17 @@ const INITIAL_FIELDS: FormFields = {
 function validate(fields: FormFields): Record<string, string> {
   const errors: Record<string, string> = {};
 
-  if (!fields.teamName.trim()) errors.teamName = 'Team name is required';
-  if (!fields.displayName.trim()) errors.displayName = 'Display name is required';
+  if (!fields.teamName.trim()) {
+    errors.teamName = 'Team name is required';
+  } else if (containsProfanity(fields.teamName)) {
+    errors.teamName = 'Please choose an appropriate team name';
+  }
+
+  if (!fields.displayName.trim()) {
+    errors.displayName = 'Display name is required';
+  } else if (containsProfanity(fields.displayName)) {
+    errors.displayName = 'Please choose an appropriate name';
+  }
 
   if (!fields.email.trim()) {
     errors.email = 'Email is required';
@@ -47,6 +57,12 @@ function validate(fields: FormFields): Record<string, string> {
     errors.password = 'Password is required';
   } else if (fields.password.length < 8) {
     errors.password = 'Must be at least 8 characters';
+  } else if (!/[A-Z]/.test(fields.password)) {
+    errors.password = 'Must include an uppercase letter';
+  } else if (!/[a-z]/.test(fields.password)) {
+    errors.password = 'Must include a lowercase letter';
+  } else if (!/[0-9]/.test(fields.password)) {
+    errors.password = 'Must include a number';
   }
 
   if (fields.password !== fields.confirmPassword) {
@@ -115,11 +131,13 @@ export function RegisterPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
-          <img
-            src="/assets/office-logo.png"
-            alt="Agent Desk"
-            className="auth-logo"
-          />
+          <Link to="/" className="auth-logo-link">
+            <img
+              src="/assets/office-logo.png"
+              alt="Agent Desk"
+              className="auth-logo"
+            />
+          </Link>
           <h1 className="auth-title">Create Your Team</h1>
           <p className="auth-subtitle">Get started with Agent Desk</p>
 
@@ -185,6 +203,7 @@ export function RegisterPage() {
               placeholder="••••••••"
               value={fields.password}
               error={fieldErrors.password}
+              hint="Min 8 characters, with uppercase, lowercase & a number"
               onChange={handleChange}
               autoComplete="new-password"
             />
@@ -227,6 +246,7 @@ interface FieldProps {
   placeholder: string;
   value: string;
   error?: string;
+  hint?: string;
   type?: string;
   autoComplete?: string;
   autoFocus?: boolean;
@@ -239,6 +259,7 @@ function Field({
   placeholder,
   value,
   error,
+  hint,
   type = 'text',
   autoComplete,
   autoFocus,
@@ -259,6 +280,7 @@ function Field({
         autoFocus={autoFocus}
         required
       />
+      {hint && !error && <span className="form-hint">{hint}</span>}
       {error && <span className="form-error">{error}</span>}
     </div>
   );

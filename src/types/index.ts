@@ -47,6 +47,7 @@ export interface Task {
   assignee: string;
   status: 'pending' | 'in-progress' | 'completed' | 'failed';
   createdAt: number;
+  completedAt?: number;
   cost?: number;
   modelUsed?: string;
   errorMessage?: string;

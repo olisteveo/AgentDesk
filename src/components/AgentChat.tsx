@@ -8,10 +8,10 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Send, Trash2, Download } from 'lucide-react';
+import { X, Send, Trash2, Download, Sparkles, Check } from 'lucide-react';
 import { sendChat, getChatHistory, saveChatMessages, clearChatHistory } from '../api/chat';
 import type { PersistedMessage } from '../api/chat';
-import { createDesk } from '../api/desks';
+import { createDesk, updateDesk } from '../api/desks';
 import { parseCodeBlocks } from '../utils/parseCodeBlocks';
 import { downloadCodeBlock } from '../utils/download';
 import { openCode } from '../api/tasks';
@@ -64,6 +64,12 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const [isThinking, setIsThinking] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Personality editor
+  const [showPersonality, setShowPersonality] = useState(false);
+  const [personalityText, setPersonalityText] = useState('');
+  const [savingPersonality, setSavingPersonality] = useState(false);
+  const [personalitySaved, setPersonalitySaved] = useState(false);
 
   const modelId = getModelForAgent(agent.id);
   const modelName = modelPricing[modelId]?.name || modelId;
@@ -276,6 +282,47 @@ const AgentChat: React.FC<AgentChatProps> = ({
     return msg.content;
   };
 
+  // ── Load personality when editor opens ───────────────────────
+  useEffect(() => {
+    if (!showPersonality) return;
+    const loadPrompt = async () => {
+      const localDeskId = agent.id.replace('agent-', '');
+      const assignment = deskAssignments.find(a => a.deskId === localDeskId);
+      if (!assignment?.backendDeskId) return;
+      try {
+        const { listDesks } = await import('../api/desks');
+        const allDesks = await listDesks();
+        const desk = allDesks.find(d => d.id === assignment.backendDeskId);
+        if (desk?.system_prompt) {
+          setPersonalityText(desk.system_prompt);
+        }
+      } catch {
+        // Silently fail
+      }
+    };
+    loadPrompt();
+  }, [showPersonality, agent.id, deskAssignments]);
+
+  // ── Personality save ─────────────────────────────────────────
+  const handleSavePersonality = async () => {
+    const localDeskId = agent.id.replace('agent-', '');
+    const assignment = deskAssignments.find(a => a.deskId === localDeskId);
+    const backendId = assignment?.backendDeskId;
+    if (!backendId) return;
+
+    setSavingPersonality(true);
+    try {
+      await updateDesk(backendId, { systemPrompt: personalityText });
+      setPersonalitySaved(true);
+      setTimeout(() => setPersonalitySaved(false), 2000);
+      addLogEntry(`Updated ${agent.name}'s personality`);
+    } catch {
+      addLogEntry(`Failed to update personality for ${agent.name}`);
+    } finally {
+      setSavingPersonality(false);
+    }
+  };
+
   // ── Main render ─────────────────────────────────────────────
 
   return (
@@ -291,6 +338,12 @@ const AgentChat: React.FC<AgentChatProps> = ({
             </div>
           </div>
           <div className="ac-header-actions">
+            <button
+              className={`ac-icon-btn${showPersonality ? ' active' : ''}`}
+              onClick={() => setShowPersonality(!showPersonality)}
+              title="Edit personality">
+              <Sparkles size={14} />
+            </button>
             {messages.length > 0 && (
               <button className="ac-icon-btn" onClick={handleClear} title="Clear history">
                 <Trash2 size={14} />
@@ -301,6 +354,28 @@ const AgentChat: React.FC<AgentChatProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Inline personality editor */}
+        {showPersonality && (
+          <div className="ac-personality-editor">
+            <textarea
+              className="ac-personality-input"
+              value={personalityText}
+              onChange={e => setPersonalityText(e.target.value)}
+              placeholder="Describe this agent's personality and approach..."
+              maxLength={2000}
+              rows={3}
+            />
+            <div className="ac-personality-actions">
+              <button
+                className="ac-personality-save"
+                onClick={handleSavePersonality}
+                disabled={savingPersonality}>
+                {personalitySaved ? <><Check size={12} /> Saved</> : savingPersonality ? 'Saving...' : 'Save Personality'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="ac-messages">

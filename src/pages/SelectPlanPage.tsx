@@ -2,14 +2,15 @@
  * SelectPlanPage — shown after email verification in the onboarding funnel.
  * Two-panel layout: Free (left) and Pro (right).
  *
- * Free → continue straight to CEO name/avatar onboarding.
- * Pro  → placeholder for Stripe checkout (scaffolded, not wired yet).
+ * Free → sets plan in backend, continues to office.
+ * Pro  → creates Stripe Checkout session, redirects to Stripe for payment.
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { selectPlan } from '../api/auth';
+import { createCheckoutSession } from '../api/stripe';
 import { Check, Zap } from 'lucide-react';
 import './auth.css';
 import './select-plan.css';
@@ -48,10 +49,10 @@ const PLANS: PlanDef[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: '$29',
+    price: '$19',
     period: '/month',
     tagline: 'For professionals and small teams',
-    cta: 'Start 14-Day Free Trial',
+    cta: 'Subscribe to Pro',
     highlighted: true,
     features: [
       'Up to 5 users',
@@ -80,22 +81,20 @@ export function SelectPlanPage() {
     setError('');
 
     try {
-      const result = await selectPlan(planId);
-
-      // Update local auth state
-      updateUser({ plan: result.plan, planSelected: true });
-
       if (planId === 'pro') {
-        // TODO: redirect to Stripe Checkout when wired
-        // For now, treat same as free — go to onboarding
-        navigate('/office');
-      } else {
-        navigate('/office');
+        // Redirect to Stripe Checkout for payment
+        const { checkoutUrl } = await createCheckoutSession('pro', 'onboarding');
+        window.location.href = checkoutUrl;
+        return; // Don't clear loading — page is navigating away
       }
+
+      // Free plan — set directly via backend
+      const result = await selectPlan('free');
+      updateUser({ plan: result.plan, planSelected: true });
+      navigate('/office');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to select plan';
       setError(msg);
-    } finally {
       setLoading(null);
     }
   };
@@ -156,7 +155,9 @@ export function SelectPlanPage() {
                 onClick={() => handleSelect(plan.id)}
                 disabled={loading !== null}
               >
-                {loading === plan.id ? 'Setting up...' : plan.cta}
+                {loading === plan.id
+                  ? (plan.id === 'pro' ? 'Redirecting to checkout...' : 'Setting up...')
+                  : plan.cta}
               </button>
             </div>
           ))}

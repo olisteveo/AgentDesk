@@ -1,5 +1,128 @@
 import type { Zone, Agent, ModelInfo } from '../types';
 
+// ── Role Archetypes ──────────────────────────────────────────
+// Pre-configured agent roles for the humanized hire flow.
+
+export type ModelTier = 'budget' | 'balanced' | 'premium';
+
+export interface RoleArchetype {
+  id: string;
+  icon: string;
+  title: string;
+  tagline: string;
+  category: string;
+  defaultCapabilities: string[];
+  defaultSystemPrompt: string;
+  suggestedNames: string[];
+  modelTier: ModelTier;
+}
+
+export const ROLE_ARCHETYPES: RoleArchetype[] = [
+  {
+    id: 'coding',
+    icon: '\u{1F4BB}',
+    title: 'Coding Assistant',
+    tagline: 'Writes clean code, debugs issues, reviews PRs',
+    category: 'engineering',
+    defaultCapabilities: ['code-generation', 'debugging', 'code-review', 'refactoring'],
+    defaultSystemPrompt:
+      'You are a senior software engineer. You write clean, well-documented code. When given a task, you think through edge cases, write tests when appropriate, and explain your reasoning. You prefer simple solutions over clever ones.',
+    suggestedNames: ['Dev', 'Coda', 'Byte', 'Syntax', 'Rune'],
+    modelTier: 'balanced',
+  },
+  {
+    id: 'writing',
+    icon: '\u{270D}\uFE0F',
+    title: 'Writing Editor',
+    tagline: 'Drafts content, edits copy, writes emails',
+    category: 'content',
+    defaultCapabilities: ['copywriting', 'editing', 'email-drafting', 'proofreading'],
+    defaultSystemPrompt:
+      'You are a professional writer and editor. You craft clear, engaging copy tailored to the audience. You can switch between formal and casual tones. You catch grammar issues, improve flow, and make every word count.',
+    suggestedNames: ['Quill', 'Ink', 'Prose', 'Aria', 'Echo'],
+    modelTier: 'balanced',
+  },
+  {
+    id: 'research',
+    icon: '\u{1F50D}',
+    title: 'Research Analyst',
+    tagline: 'Investigates topics, summarizes findings, compares options',
+    category: 'research',
+    defaultCapabilities: ['research', 'summarization', 'comparison', 'fact-checking'],
+    defaultSystemPrompt:
+      'You are a thorough research analyst. You investigate topics systematically, cite your reasoning, and present findings in a structured format. You compare options objectively, flag uncertainties, and distinguish between facts and opinions.',
+    suggestedNames: ['Scout', 'Atlas', 'Lens', 'Nova', 'Sage'],
+    modelTier: 'budget',
+  },
+  {
+    id: 'creative',
+    icon: '\u{1F3A8}',
+    title: 'Creative Designer',
+    tagline: 'UI/UX thinking, branding ideas, visual concepts',
+    category: 'design',
+    defaultCapabilities: ['ui-design', 'branding', 'visual-concepts', 'ux-writing'],
+    defaultSystemPrompt:
+      'You are a creative designer and visual thinker. You generate UI/UX ideas, suggest color palettes, write microcopy, and think about user experience holistically. You describe visual concepts clearly and consider accessibility.',
+    suggestedNames: ['Pixel', 'Hue', 'Canvas', 'Bloom', 'Sketch'],
+    modelTier: 'balanced',
+  },
+  {
+    id: 'data',
+    icon: '\u{1F4CA}',
+    title: 'Data Analyst',
+    tagline: 'SQL queries, data viz, statistical analysis',
+    category: 'data',
+    defaultCapabilities: ['sql', 'data-analysis', 'visualization', 'statistics'],
+    defaultSystemPrompt:
+      'You are a data analyst. You write efficient SQL queries, explain statistical concepts clearly, and suggest the right visualization for the data. You think about data quality, edge cases in aggregations, and present insights in plain language.',
+    suggestedNames: ['Query', 'Datum', 'Graph', 'Sigma', 'Pivot'],
+    modelTier: 'budget',
+  },
+  {
+    id: 'general',
+    icon: '\u{1F31F}',
+    title: 'General Assistant',
+    tagline: 'Versatile helper for any task',
+    category: 'general',
+    defaultCapabilities: ['general', 'brainstorming', 'planning', 'problem-solving'],
+    defaultSystemPrompt:
+      'You are a versatile AI assistant. You adapt to whatever task is needed \u2014 writing, analysis, planning, brainstorming, or problem-solving. You ask clarifying questions when a task is ambiguous and always aim to be helpful and thorough.',
+    suggestedNames: ['Spark', 'Dash', 'Bolt', 'Flux', 'Chip'],
+    modelTier: 'budget',
+  },
+];
+
+// ── Friendly Model Labels ────────────────────────────────────
+// Human-readable descriptions shown during model selection.
+
+export const MODEL_FRIENDLY_LABELS: Record<string, { tagline: string; tier: ModelTier }> = {
+  // OpenAI
+  'gpt-4.1':          { tagline: 'Powerful & precise',     tier: 'premium' },
+  'gpt-4.1-mini':     { tagline: 'Great value',            tier: 'balanced' },
+  'gpt-4.1-nano':     { tagline: 'Ultra cheap',            tier: 'budget' },
+  'gpt-4o':           { tagline: 'Fast & capable',         tier: 'balanced' },
+  'gpt-4o-mini':      { tagline: 'Fast & cheap',           tier: 'budget' },
+  'o3':               { tagline: 'Deep reasoning',         tier: 'premium' },
+  'o3-mini':          { tagline: 'Reasoning on a budget',  tier: 'budget' },
+  'o4-mini':          { tagline: 'Reasoning on a budget',  tier: 'budget' },
+  'codex-mini':       { tagline: 'Code specialist',        tier: 'balanced' },
+  // Anthropic
+  'claude-opus-4':      { tagline: 'Maximum quality',      tier: 'premium' },
+  'claude-sonnet-4':    { tagline: 'Smart all-rounder',    tier: 'balanced' },
+  'claude-sonnet-4-5':  { tagline: 'Smart all-rounder',    tier: 'balanced' },
+  'claude-haiku-3-5':   { tagline: 'Lightning fast',       tier: 'budget' },
+  // Moonshot
+  'kimi-k2.5':          { tagline: 'Long context expert',  tier: 'premium' },
+  'kimi-k1.5':          { tagline: 'Value multi-lingual',  tier: 'balanced' },
+  // Google
+  'gemini-2.5-pro':       { tagline: 'Google\'s best',     tier: 'premium' },
+  'gemini-2.5-flash':     { tagline: 'Lightning fast',     tier: 'budget' },
+  'gemini-2.5-flash-lite':{ tagline: 'Almost free',        tier: 'budget' },
+  // DeepSeek
+  'deepseek-chat':        { tagline: 'Incredible value',   tier: 'budget' },
+  'deepseek-reasoner':    { tagline: 'Reasoning champ',    tier: 'balanced' },
+};
+
 export const MODEL_PRICING: Record<string, { input: number; output: number; name: string }> = {
   // OpenAI
   'gpt-4.1':       { input: 0.00002,   output: 0.00006,  name: 'GPT-4.1' },

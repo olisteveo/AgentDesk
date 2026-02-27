@@ -23,7 +23,7 @@ import {
 } from 'react';
 
 import * as authApi from '../api/auth';
-import { setTokens, clearTokens, getAccessToken } from '../api/client';
+import { setTokens, clearTokens, getAccessToken, apiRequest } from '../api/client';
 import type { AuthResponse, LoginRequest, RegisterRequest } from '../api/auth';
 
 // ── User type ────────────────────────────────────────────────
@@ -41,6 +41,7 @@ export interface AuthUser {
   onboardingDone: boolean;
   avatarId: string;
   hasPassword: boolean;
+  stripeCancelAt: string | null;
 }
 
 // ── Context type ─────────────────────────────────────────────
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session from localStorage on mount
+  // Restore session from localStorage on mount, then refresh from API
   useEffect(() => {
     const token = getAccessToken();
     if (!token) {
@@ -86,6 +87,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+
+    // Refresh from API in the background to pick up server-side changes
+    // (e.g. plan upgrades via Stripe webhook, email verification in another tab)
+    authApi.fetchMe().then((res) => {
+      const fresh: AuthUser = {
+        id: res.user.id,
+        email: res.user.email,
+        displayName: res.user.displayName,
+        role: res.user.role,
+        teamId: res.team.id,
+        teamName: res.team.name,
+        plan: res.team.plan ?? 'free',
+        emailVerified: res.user.emailVerified ?? true,
+        planSelected: res.user.planSelected ?? true,
+        onboardingDone: res.user.onboardingDone ?? false,
+        avatarId: res.user.avatarId ?? 'avatar1',
+        hasPassword: res.user.hasPassword ?? true,
+        stripeCancelAt: res.team.stripeCancelAt ?? null,
+      };
+      localStorage.setItem('user', JSON.stringify(fresh));
+      setUser(fresh);
+
+      // Silently sync browser timezone to backend
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) {
+        apiRequest('/api/users/me', {
+          method: 'PATCH',
+          body: JSON.stringify({ timezone: tz }),
+        }).catch(() => { /* silent */ });
+      }
+    }).catch(() => {
+      // Silent fail — stale localStorage is better than no user
+    });
   }, []);
 
   // Persist user + tokens from an auth response
@@ -105,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboardingDone: res.user.onboardingDone ?? false,
       avatarId: res.user.avatarId ?? 'avatar1',
       hasPassword: res.user.hasPassword ?? true,
+      stripeCancelAt: res.team.stripeCancelAt ?? null,
     };
 
     localStorage.setItem('user', JSON.stringify(userData));
@@ -177,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboardingDone: res.user.onboardingDone ?? false,
       avatarId: res.user.avatarId ?? 'avatar1',
       hasPassword: res.user.hasPassword ?? true,
+      stripeCancelAt: res.team.stripeCancelAt ?? null,
     };
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);

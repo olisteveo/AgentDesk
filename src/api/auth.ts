@@ -40,6 +40,7 @@ export interface AuthTeam {
   name: string;
   slug: string;
   plan?: string;
+  stripeCancelAt?: string | null;
 }
 
 export interface AuthResponse {

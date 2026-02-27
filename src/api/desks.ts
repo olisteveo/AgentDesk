@@ -24,6 +24,10 @@ export interface Desk {
   agent_color: string;
   sort_order: number;
   is_active: boolean;
+  description: string | null;
+  category: string | null;
+  capabilities: string[];
+  system_prompt: string | null;
   created_at: string;
   models: DeskModel[];
 }
@@ -53,6 +57,10 @@ export function createDesk(data: {
   avatarId?: string;
   deskType?: 'mini' | 'standard' | 'power';
   models: string[];
+  category?: string;
+  capabilities?: string[];
+  description?: string;
+  systemPrompt?: string;
 }): Promise<Desk> {
   return apiRequest('/api/desks', {
     method: 'POST',
@@ -60,7 +68,7 @@ export function createDesk(data: {
   });
 }
 
-/** Update desk metadata (name, avatar, agent name, colour, type). */
+/** Update desk metadata (name, avatar, agent name, colour, type, semantics). */
 export function updateDesk(
   deskId: string,
   data: Partial<{
@@ -69,6 +77,10 @@ export function updateDesk(
     agentColor: string;
     avatarId: string;
     deskType: 'mini' | 'standard' | 'power';
+    category: string;
+    capabilities: string[];
+    description: string;
+    systemPrompt: string;
   }>,
 ): Promise<Desk> {
   return apiRequest(`/api/desks/${deskId}`, {

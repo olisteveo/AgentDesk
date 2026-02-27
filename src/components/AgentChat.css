@@ -430,6 +430,77 @@
   line-height: 1.5;
 }
 
+/* ── Personality Editor ─────────────────────────────────────── */
+
+.ac-icon-btn.active {
+  color: #ffa502;
+  background: rgba(255, 165, 2, 0.12);
+  border-color: rgba(255, 165, 2, 0.3);
+}
+
+.ac-personality-editor {
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 165, 2, 0.04);
+  animation: acSlideDown 0.2s ease;
+}
+
+@keyframes acSlideDown {
+  from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
+  to { opacity: 1; max-height: 200px; }
+}
+
+.ac-personality-input {
+  width: 100%;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #ddd;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 60px;
+  max-height: 160px;
+  box-sizing: border-box;
+}
+
+.ac-personality-input:focus {
+  outline: none;
+  border-color: rgba(255, 165, 2, 0.4);
+}
+
+.ac-personality-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.ac-personality-save {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 14px;
+  background: rgba(255, 165, 2, 0.15);
+  border: 1px solid rgba(255, 165, 2, 0.3);
+  border-radius: 6px;
+  color: #ffa502;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ac-personality-save:hover:not(:disabled) {
+  background: rgba(255, 165, 2, 0.25);
+}
+
+.ac-personality-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 
 @media (max-width: 500px) {

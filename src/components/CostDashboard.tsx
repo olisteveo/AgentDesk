@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { X, RefreshCw, TrendingUp, BarChart3, Bot, Users, Bell, Check } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, RefreshCw, TrendingUp, BarChart3, Bot, Users, Bell, Check, Sparkles, AlertTriangle } from 'lucide-react';
 import { MODEL_PRICING, PROVIDERS_LIST } from '../utils/constants';
 import type { DailyBreakdown, ModelBreakdown, DeskCostBreakdown, CostAlert } from '../api/team';
 import type { ProviderConnection } from '../api/providers';
+import { getRoutingStats } from '../api/routing';
+import type { RoutingStats } from '../api/routing';
 import './CostDashboard.css';
 
 // ── Props ────────────────────────────────────────────────────
@@ -83,8 +85,25 @@ const CostDashboard: React.FC<CostDashboardProps> = ({
   onRefresh,
   onAcknowledgeAlert,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'agents' | 'models'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'agents' | 'models' | 'routing'>('overview');
   const [hoveredBar, setHoveredBar] = useState<number | null>(null);
+  const [routingStats, setRoutingStats] = useState<RoutingStats | null>(null);
+  const [routingStatsLoading, setRoutingStatsLoading] = useState(false);
+  const [routingStatsError, setRoutingStatsError] = useState<string | null>(null);
+
+  // Load routing stats when the tab is opened
+  useEffect(() => {
+    if (activeTab === 'routing' && !routingStats && !routingStatsLoading) {
+      setRoutingStatsLoading(true);
+      setRoutingStatsError(null);
+      getRoutingStats()
+        .then(setRoutingStats)
+        .catch((err) => {
+          setRoutingStatsError(err?.message || 'Failed to load routing stats');
+        })
+        .finally(() => setRoutingStatsLoading(false));
+    }
+  }, [activeTab, routingStats, routingStatsLoading]);
 
   // Aggregate daily data for chart
   const dailyTotals = useMemo(() => aggregateDailyTotals(dailyHistory), [dailyHistory]);
@@ -134,6 +153,7 @@ const CostDashboard: React.FC<CostDashboardProps> = ({
             { id: 'history', label: 'History', icon: <BarChart3 size={14} /> },
             { id: 'agents', label: 'By Agent', icon: <Users size={14} /> },
             { id: 'models', label: 'Models', icon: <Bot size={14} /> },
+            { id: 'routing', label: 'Routing', icon: <Sparkles size={14} /> },
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -441,6 +461,137 @@ const CostDashboard: React.FC<CostDashboardProps> = ({
                         </div>
                       );
                     })}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Routing Tab ──────────────────────────────── */}
+          {activeTab === 'routing' && (
+            <div className="cd-tab-content">
+              <h3>Smart Routing</h3>
+              {routingStatsLoading ? (
+                <div className="cd-empty">Loading routing stats...</div>
+              ) : !routingStats || (routingStats.totalSuggestions === 0 && routingStats.activeRules === 0) ? (
+                <div className="routing-empty-state">
+                  <div className="routing-empty-icon"><Sparkles size={24} /></div>
+                  <div className="routing-empty-title">Smart Routing</div>
+                  <div className="routing-empty-desc">
+                    Route tasks to the best agent & model automatically. Data will appear here once you start using routing.
+                  </div>
+                  <div className="routing-empty-steps">
+                    <div className="routing-empty-step">
+                      <span className="routing-empty-step-num">1</span>
+                      Connect a provider with active API credits
+                    </div>
+                    <div className="routing-empty-step">
+                      <span className="routing-empty-step-num">2</span>
+                      Create a task — routing suggestions appear automatically
+                    </div>
+                    <div className="routing-empty-step">
+                      <span className="routing-empty-step-num">3</span>
+                      Accept or modify suggestions to train the system
+                    </div>
+                  </div>
+                  {routingStatsError && (
+                    <div className="routing-error-msg">
+                      <AlertTriangle size={12} /> {routingStatsError}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* Stats cards */}
+                  <div className="cd-stats-row">
+                    <div className="cd-stat-card">
+                      <div className="cd-stat-label">Suggestions</div>
+                      <div className="cd-stat-value">{routingStats.totalSuggestions}</div>
+                    </div>
+                    <div className="cd-stat-card">
+                      <div className="cd-stat-label">Accepted</div>
+                      <div className="cd-stat-value" style={{ color: '#1dd1a1' }}>{routingStats.accepted}</div>
+                    </div>
+                    <div className="cd-stat-card">
+                      <div className="cd-stat-label">Acceptance Rate</div>
+                      <div className="cd-stat-value" style={{ color: routingStats.acceptanceRate >= 0.7 ? '#1dd1a1' : '#feca57' }}>
+                        {Math.round(routingStats.acceptanceRate * 100)}%
+                      </div>
+                    </div>
+                    <div className="cd-stat-card">
+                      <div className="cd-stat-label">Classifier Cost</div>
+                      <div className="cd-stat-value">{formatCost(routingStats.totalClassifierCost)}</div>
+                    </div>
+                  </div>
+
+                  {/* Decisions breakdown */}
+                  <div className="cd-section">
+                    <h4 className="cd-section-title">Decision Breakdown (30 days)</h4>
+                    <div className="routing-decisions-bar">
+                      {routingStats.totalSuggestions > 0 && (
+                        <>
+                          <div
+                            className="routing-bar-segment accepted"
+                            style={{ width: `${(routingStats.accepted / routingStats.totalSuggestions) * 100}%` }}
+                            title={`Accepted: ${routingStats.accepted}`}
+                          />
+                          <div
+                            className="routing-bar-segment modified"
+                            style={{ width: `${(routingStats.modified / routingStats.totalSuggestions) * 100}%` }}
+                            title={`Modified: ${routingStats.modified}`}
+                          />
+                          <div
+                            className="routing-bar-segment rejected"
+                            style={{ width: `${(routingStats.rejected / routingStats.totalSuggestions) * 100}%` }}
+                            title={`Rejected: ${routingStats.rejected}`}
+                          />
+                          <div
+                            className="routing-bar-segment skipped"
+                            style={{ width: `${(routingStats.skipped / routingStats.totalSuggestions) * 100}%` }}
+                            title={`Skipped: ${routingStats.skipped}`}
+                          />
+                        </>
+                      )}
+                    </div>
+                    <div className="routing-legend">
+                      <span className="routing-legend-item"><span className="routing-dot accepted" /> Accepted ({routingStats.accepted})</span>
+                      <span className="routing-legend-item"><span className="routing-dot modified" /> Modified ({routingStats.modified})</span>
+                      <span className="routing-legend-item"><span className="routing-dot rejected" /> Rejected ({routingStats.rejected})</span>
+                      <span className="routing-legend-item"><span className="routing-dot skipped" /> Skipped ({routingStats.skipped})</span>
+                    </div>
+                  </div>
+
+                  {/* Top routed desks */}
+                  {routingStats.topDesks.length > 0 && (
+                    <div className="cd-section">
+                      <h4 className="cd-section-title">Top Routed Desks</h4>
+                      <div className="routing-top-desks">
+                        {routingStats.topDesks.map((desk, i) => (
+                          <div key={i} className="routing-desk-row">
+                            <div className="routing-desk-info">
+                              <span className="routing-desk-name-label">{desk.desk_name}</span>
+                              <span className="routing-desk-agent">{desk.agent_name}</span>
+                            </div>
+                            <div className="routing-desk-stats">
+                              <span>{desk.suggestion_count} suggestions</span>
+                              <span style={{ color: '#1dd1a1' }}>{desk.accepted_count} accepted</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Active rules + avg confidence */}
+                  <div className="cd-section routing-footer-stats">
+                    <div>
+                      <span className="routing-footer-label">Active Rules: </span>
+                      <span className="routing-footer-value">{routingStats.activeRules}</span>
+                    </div>
+                    <div>
+                      <span className="routing-footer-label">Avg Confidence: </span>
+                      <span className="routing-footer-value">{Math.round(routingStats.avgConfidence * 100)}%</span>
+                    </div>
+                  </div>
                 </>
               )}
             </div>

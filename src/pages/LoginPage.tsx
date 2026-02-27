@@ -60,11 +60,13 @@ export function LoginPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
-          <img
-            src="/assets/office-logo.png"
-            alt="Agent Desk"
-            className="auth-logo"
-          />
+          <Link to="/" className="auth-logo-link">
+            <img
+              src="/assets/office-logo.png"
+              alt="Agent Desk"
+              className="auth-logo"
+            />
+          </Link>
           <h1 className="auth-title">Welcome Back</h1>
           <p className="auth-subtitle">Sign in to your Agent Desk</p>
 

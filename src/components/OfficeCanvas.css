@@ -204,6 +204,31 @@
   font-style: italic;
 }
 
+/* Routing Insights Button */
+.routing-insights-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(255, 165, 2, 0.08);
+  border: 1px solid rgba(255, 165, 2, 0.2);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  text-align: center;
+  justify-content: center;
+}
+
+.routing-insights-btn:hover {
+  background: rgba(255, 165, 2, 0.15);
+  border-color: rgba(255, 165, 2, 0.4);
+  transform: translateY(-1px);
+  color: #ffa502;
+}
+
 /* Top Navigation Bar */
 .top-nav {
   position: fixed;
@@ -283,6 +308,127 @@
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   color: white;
+}
+
+/* ── Hire Agent nudge (skipped onboarding Step 3) ────── */
+
+.top-nav button.hire-nudge-pulse {
+  animation: hire-nudge-glow 1.5s ease-in-out infinite;
+  border-color: rgba(102, 126, 234, 0.6);
+  color: #fff;
+}
+
+@keyframes hire-nudge-glow {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(102, 126, 234, 0.3);
+    background: rgba(102, 126, 234, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(102, 126, 234, 0.6);
+    background: rgba(102, 126, 234, 0.3);
+  }
+}
+
+.hire-nudge-toast {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+  border-radius: 10px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  animation: nudge-toast-in 0.4s ease-out;
+}
+
+.hire-nudge-toast span {
+  color: #ccc;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.hire-nudge-toast button {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.hire-nudge-toast button:hover {
+  color: #aaa;
+}
+
+@keyframes nudge-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Checkout return toast */
+.checkout-toast {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  border-radius: 10px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  animation: nudge-toast-in 0.4s ease-out;
+}
+
+.checkout-toast-success {
+  background: rgba(16, 40, 16, 0.92);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+.checkout-toast-canceled {
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid rgba(255, 171, 0, 0.35);
+}
+
+.checkout-toast span {
+  color: #ccc;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.checkout-toast-success span {
+  color: #4ade80;
+}
+
+.checkout-toast button {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.checkout-toast button:hover {
+  color: #aaa;
 }
 
 .top-nav .user-icon {
@@ -1388,6 +1534,23 @@
   flex: 1;
 }
 
+.onboarding-skip-btn {
+  width: 100%;
+  padding: 10px;
+  margin-top: 4px;
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.onboarding-skip-btn:hover {
+  color: #aaa;
+}
+
 /* ── Canvas Hover Tooltip ────────────────────────────────── */
 .canvas-tooltip {
   position: fixed;
@@ -1584,6 +1747,24 @@
 .feed-clear-btn:hover {
   border-color: rgba(255,107,107,0.4);
   color: #ff6b6b;
+}
+
+.feed-whiteboard-btn {
+  background: none;
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  color: #888;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  transition: all 0.2s;
+}
+
+.feed-whiteboard-btn:hover {
+  border-color: rgba(102, 126, 234, 0.5);
+  color: #667eea;
 }
 
 /* Per-task delete button — glass style */
@@ -2043,4 +2224,273 @@
   color: #888;
   line-height: 1.5;
   max-width: 380px;
+}
+
+/* ── Smart Routing Suggestion Banner ─────────────────────── */
+
+.routing-suggestion {
+  background: linear-gradient(135deg, rgba(29, 209, 161, 0.08) 0%, rgba(102, 126, 234, 0.08) 100%);
+  border: 1px solid rgba(29, 209, 161, 0.25);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  animation: routingSlideIn 0.25s ease-out;
+}
+
+.routing-suggestion.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #aaa;
+  font-size: 12px;
+  padding: 10px 12px;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.routing-icon {
+  color: #1dd1a1;
+  flex-shrink: 0;
+}
+
+.routing-icon.spin {
+  animation: routingSpin 1.5s linear infinite;
+  color: #aaa;
+}
+
+.routing-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.routing-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1dd1a1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.routing-main {
+  margin-bottom: 8px;
+}
+
+.routing-desk-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #eee;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.routing-agent-name {
+  font-weight: 400;
+  color: #aaa;
+  font-size: 12px;
+}
+
+.routing-confidence {
+  background: rgba(29, 209, 161, 0.15);
+  color: #1dd1a1;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.routing-reasoning {
+  font-size: 12px;
+  color: #aaa;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.routing-cost {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.routing-cost-alt {
+  color: #666;
+}
+
+.routing-alt {
+  font-size: 11px;
+  color: #888;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 8px;
+}
+
+.routing-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.routing-accept {
+  flex: 1;
+  padding: 6px 12px;
+  background: rgba(29, 209, 161, 0.15);
+  border: 1px solid rgba(29, 209, 161, 0.3);
+  border-radius: 6px;
+  color: #1dd1a1;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.routing-accept:hover {
+  background: rgba(29, 209, 161, 0.25);
+  border-color: #1dd1a1;
+}
+
+.routing-dismiss {
+  padding: 6px 12px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.routing-dismiss:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #aaa;
+}
+
+@keyframes routingSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes routingSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── View Mode Toggle ──────────────────────────────────────── */
+
+.view-mode-toggle {
+  display: flex;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-toggle-btn {
+  padding: 5px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.view-toggle-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.view-toggle-btn.active {
+  background: rgba(102, 126, 234, 0.2);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Advanced Dropdown ─────────────────────────────────────── */
+
+.advanced-dropdown-wrap {
+  position: relative;
+}
+
+.advanced-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.advanced-toggle-btn:hover,
+.advanced-toggle-btn.open {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.3);
+  color: #fff;
+}
+
+.advanced-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.98), rgba(22, 33, 62, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px);
+  z-index: 100;
+  animation: advDropIn 0.15s ease;
+}
+
+@keyframes advDropIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.advanced-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.advanced-dropdown button:hover {
+  background: rgba(102, 126, 234, 0.12);
+  color: #fff;
+}
+
+.adv-badge {
+  background: #ff6b6b;
+  color: #fff;
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: auto;
 }

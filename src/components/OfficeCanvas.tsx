@@ -23,13 +23,19 @@ import {
 } from '../utils/sprites';
 import MeetingRoom from './MeetingRoom';
 import CostDashboard from './CostDashboard';
-import { ClipboardList, DollarSign, X, Trash2, Rss, Download, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles } from 'lucide-react';
+import { ClipboardList, DollarSign, X, Trash2, Rss, Download, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles, ChevronDown, LayoutDashboard } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { downloadCodeBlock, downloadAsMarkdown } from '../utils/download';
 import { friendlyError } from '../utils/friendlyErrors';
 import UpgradePrompt from './modals/UpgradePrompt';
+import { classifyTask, recordRoutingDecision } from '../api/routing';
+import type { RoutingDeskScore } from '../api/routing';
+import { createCheckoutSession } from '../api/stripe';
+import { validateName } from '../utils/profanityFilter';
 import RulesDashboard from './modals/RulesDashboard';
+import RoutingInsightsModal from './modals/RoutingInsightsModal';
 import AgentChat from './AgentChat';
+import DashboardView from './DashboardView';
 import { listRules } from '../api/rules';
 import { CORE_RULES_PRESETS } from '../utils/coreRulesPresets';
 import type { PlanTier } from '../utils/tierConfig';
@@ -107,7 +113,7 @@ const INITIAL_AGENTS: Agent[] = [
 // Sprite assets + directional sprite system imported from utils/sprites
 
 const OfficeCanvas: React.FC = () => {
-  const { user, markOnboardingDone } = useAuth();
+  const { user, markOnboardingDone, refreshUser } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const carpetPatternRef = useRef<CanvasPattern | null>(null);
   const mountedRef = useRef(false);
@@ -122,6 +128,10 @@ const OfficeCanvas: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
+  const [routingSuggestions, setRoutingSuggestions] = useState<RoutingDeskScore[] | null>(null);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  const [routingDismissed, setRoutingDismissed] = useState(false);
+  const routingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCostPanel, setShowCostPanel] = useState(false);
   const [showFeedPanel, setShowFeedPanel] = useState(false);
   const animationRef = useRef<number | undefined>(undefined);
@@ -131,11 +141,33 @@ const OfficeCanvas: React.FC = () => {
   const [onboardingDone, setOnboardingDone] = useState(user?.onboardingDone ?? false);
   const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
   const [onboardingProvider, setOnboardingProvider] = useState<DetectedProvider | null>(null);
+  const [showHireNudge, setShowHireNudge] = useState(false);
   const [ceoName, setCeoName] = useState(user?.displayName ?? 'You');
   const [ceoSprite, setCeoSprite] = useState<'avatar1' | 'avatar2' | 'avatar3'>(
     (user?.avatarId as 'avatar1' | 'avatar2' | 'avatar3') ?? 'avatar1'
   );
   const [selectedCorePreset, setSelectedCorePreset] = useState<string>('professional');
+  const [onboardingNameError, setOnboardingNameError] = useState('');
+
+  // Sync CEO name/avatar when user profile changes (e.g. settings update)
+  useEffect(() => {
+    if (onboardingDone && user?.displayName) {
+      setCeoName(user.displayName);
+      // Also update the CEO agent in the agents array so the canvas redraws
+      setAgents(prev => prev.map(a =>
+        a.id === 'ceo' ? { ...a, name: user.displayName } : a
+      ));
+    }
+  }, [user?.displayName, onboardingDone]);
+
+  useEffect(() => {
+    if (onboardingDone && user?.avatarId) {
+      setCeoSprite(user.avatarId as 'avatar1' | 'avatar2' | 'avatar3');
+      setAgents(prev => prev.map(a =>
+        a.id === 'ceo' ? { ...a, avatar: user.avatarId } : a
+      ));
+    }
+  }, [user?.avatarId, onboardingDone]);
 
   // Desk configuration state
   const [desks, setDesks] = useState<Zone[]>(DEFAULT_DESKS);
@@ -185,6 +217,17 @@ const OfficeCanvas: React.FC = () => {
   const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0);
   const [corePresetName, setCorePresetName] = useState<string | null>(null);
 
+  // Routing insights modal state
+  const [showRoutingInsights, setShowRoutingInsights] = useState(false);
+
+  // Advanced dropdown (consolidates Rules, Routing, Whiteboard)
+  const [showAdvancedMenu, setShowAdvancedMenu] = useState(false);
+
+  // View mode toggle: 'office' (pixel canvas) or 'dashboard' (power mode)
+  const [viewMode, setViewMode] = useState<'office' | 'dashboard'>(() => {
+    try { return (localStorage.getItem('agentdesk-view-mode') as 'office' | 'dashboard') || 'office'; } catch { return 'office'; }
+  });
+
   // Agent chat state (1-on-1 chat panel)
   const [chatAgent, setChatAgent] = useState<Agent | null>(null);
 
@@ -195,6 +238,47 @@ const OfficeCanvas: React.FC = () => {
     current: number;
     max: number;
   } | null>(null);
+
+  // Checkout return toast state
+  const [checkoutToast, setCheckoutToast] = useState<{ type: 'success' | 'canceled'; message: string } | null>(null);
+
+  // Handle Stripe checkout return (?checkout=success or ?checkout=canceled)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutStatus = params.get('checkout');
+    if (!checkoutStatus) return;
+
+    // Clean URL params immediately
+    const url = new URL(window.location.href);
+    url.searchParams.delete('checkout');
+    window.history.replaceState({}, '', url.pathname + url.search);
+
+    if (checkoutStatus === 'success') {
+      setCheckoutToast({ type: 'success', message: 'Welcome to Pro! Your subscription is active.' });
+
+      // Webhook may not have fired yet — poll refreshUser for up to 10s
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          await refreshUser();
+        } catch { /* ignore */ }
+        if (attempts >= 5) clearInterval(poll);
+      }, 2000);
+
+      // Cleanup
+      return () => clearInterval(poll);
+    } else if (checkoutStatus === 'canceled') {
+      setCheckoutToast({ type: 'canceled', message: 'Checkout canceled — you can upgrade anytime.' });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-dismiss checkout toast
+  useEffect(() => {
+    if (!checkoutToast) return;
+    const timer = setTimeout(() => setCheckoutToast(null), 8000);
+    return () => clearTimeout(timer);
+  }, [checkoutToast]);
 
   // Load sprite images once on mount
   useEffect(() => {
@@ -396,6 +480,10 @@ const OfficeCanvas: React.FC = () => {
     avatar: 'avatar1' | 'avatar2' | 'avatar3';
     deskName: string;
     deskType: 'mini' | 'standard' | 'power';
+    deskCategory?: string;
+    deskCapabilities?: string[];
+    deskDescription?: string;
+    systemPrompt?: string;
   }) => {
     const { width, height } = dimensionsRef.current;
 
@@ -418,6 +506,10 @@ const OfficeCanvas: React.FC = () => {
         avatarId: data.avatar,
         deskType: data.deskType || 'mini',
         models: [data.model],
+        category: data.deskCategory,
+        capabilities: data.deskCapabilities,
+        description: data.deskDescription,
+        systemPrompt: data.systemPrompt,
       });
       backendDeskId = backendDesk.id;
     } catch (err: unknown) {
@@ -493,6 +585,40 @@ const OfficeCanvas: React.FC = () => {
 
   // updateTodayCost is now provided by useCostTracker hook
 
+  // ── Debounced routing suggestion trigger ──────────────────
+  const triggerRouting = useCallback((title: string, desc: string) => {
+    if (routingTimerRef.current) clearTimeout(routingTimerRef.current);
+    setRoutingSuggestions(null);
+    setRoutingDismissed(false);
+
+    if (title.trim().length < 5) return;
+
+    routingTimerRef.current = setTimeout(async () => {
+      setRoutingLoading(true);
+      try {
+        const result = await classifyTask({
+          title,
+          description: desc || undefined,
+          isCodeTask: isCodeRelatedTask(title, desc),
+        });
+        if (result.suggestions.length > 0) {
+          setRoutingSuggestions(result.suggestions);
+        }
+      } catch {
+        // Silently fail — routing suggestions are optional
+      } finally {
+        setRoutingLoading(false);
+      }
+    }, 800);
+  }, []);
+
+  // Cleanup routing timer on unmount
+  useEffect(() => {
+    return () => {
+      if (routingTimerRef.current) clearTimeout(routingTimerRef.current);
+    };
+  }, []);
+
   const assignTask = useCallback(async () => {
     if (!selectedAgent || !taskTitle) return;
 
@@ -566,10 +692,30 @@ const OfficeCanvas: React.FC = () => {
       return a;
     }));
 
+    // Fire-and-forget: record routing decision
+    const topSuggestion = routingSuggestions?.[0];
+    if (topSuggestion) {
+      const routingDecision = topSuggestion.deskId === assignment?.backendDeskId ? 'accepted' : 'modified';
+      recordRoutingDecision({
+        taskTitle: capturedTitle,
+        taskDescription: capturedDesc,
+        suggestedDeskId: topSuggestion.deskId,
+        suggestedModelId: topSuggestion.modelId,
+        confidence: topSuggestion.confidence,
+        reasoning: topSuggestion.reasoning,
+        decision: routingDecision,
+        finalDeskId: backendDeskId || undefined,
+        finalModelId: modelId,
+        matchedRules: topSuggestion.matchedRuleIds,
+      }).catch(() => {}); // fire-and-forget
+    }
+
     setShowTaskForm(false);
     setTaskTitle('');
     setTaskDescription('');
     setSelectedAgent('');
+    setRoutingSuggestions(null);
+    setRoutingDismissed(false);
 
     // Create task in backend and run it
     try {
@@ -586,7 +732,7 @@ const OfficeCanvas: React.FC = () => {
       // Update local task with real cost, result, and backend ID
       setTasks(prev => prev.map(t =>
         t.id === localTask.id
-          ? { ...t, status: 'completed', cost: result.costUsd, modelUsed: MODEL_PRICING[result.model]?.name || result.model, backendId: backendTask.id }
+          ? { ...t, status: 'completed', completedAt: Date.now(), cost: result.costUsd, modelUsed: MODEL_PRICING[result.model]?.name || result.model, backendId: backendTask.id }
           : t
       ));
 
@@ -676,7 +822,7 @@ const OfficeCanvas: React.FC = () => {
       console.error('Task error:', err);
       const errMsg = friendlyError(raw);
       setTasks(prev => prev.map(t =>
-        t.id === localTask.id ? { ...t, status: 'failed' as const, errorMessage: errMsg } : t
+        t.id === localTask.id ? { ...t, status: 'failed' as const, completedAt: Date.now(), errorMessage: errMsg } : t
       ));
       addLogEntry(`Task "${capturedTitle}" failed: ${errMsg}`);
 
@@ -688,7 +834,7 @@ const OfficeCanvas: React.FC = () => {
         return a;
       }));
     }
-  }, [selectedAgent, taskTitle, taskDescription, agents, deskAssignments, addLogEntry, getModelForAgent, calculateZones, updateTodayCost]);
+  }, [selectedAgent, taskTitle, taskDescription, agents, deskAssignments, addLogEntry, getModelForAgent, calculateZones, updateTodayCost, routingSuggestions]);
 
   // Meeting room logic extracted to MeetingRoom.tsx
 
@@ -1246,6 +1392,10 @@ const OfficeCanvas: React.FC = () => {
     if (onboardingProvider) {
       setWizardPreloadedProvider(onboardingProvider);
       setShowHireWizard(true);
+    } else {
+      // User skipped Step 3 — nudge them toward Hire Agent
+      setShowHireNudge(true);
+      setTimeout(() => setShowHireNudge(false), 8000);
     }
   };
 
@@ -1283,7 +1433,7 @@ const OfficeCanvas: React.FC = () => {
 
   return (
     <div className="office-canvas-container">
-      <div className="office-frame-wrapper">
+      <div className="office-frame-wrapper" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
         <div className="office-frame-watermark" />
         <div className="office-frame">
           <canvas ref={canvasRef} className="office-canvas"
@@ -1294,7 +1444,7 @@ const OfficeCanvas: React.FC = () => {
       </div>
 
       {/* Canvas hover tooltip */}
-      {tooltip && (
+      {viewMode === 'office' && tooltip && (
         <div className="canvas-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y - 10 }}>
           <div className="canvas-tooltip-name">{tooltip.text}</div>
           {tooltip.sub && <div className="canvas-tooltip-model">{tooltip.sub}</div>}
@@ -1332,11 +1482,14 @@ const OfficeCanvas: React.FC = () => {
                     type="text"
                     className="onboarding-input"
                     value={ceoName}
-                    onChange={e => setCeoName(e.target.value)}
+                    onChange={e => { setCeoName(e.target.value); setOnboardingNameError(''); }}
                     placeholder="Your name"
-                    maxLength={24}
+                    maxLength={30}
                     autoFocus
                   />
+                  {onboardingNameError && (
+                    <p style={{ color: '#ff6b6b', fontSize: 12, margin: '6px 0 0', textAlign: 'center' }}>{onboardingNameError}</p>
+                  )}
                 </div>
 
                 <div className="onboarding-section">
@@ -1363,7 +1516,14 @@ const OfficeCanvas: React.FC = () => {
 
                 <button
                   className="onboarding-enter-btn"
-                  onClick={() => setOnboardingStep(2)}
+                  onClick={() => {
+                    const nameIssue = validateName(ceoName);
+                    if (nameIssue) {
+                      setOnboardingNameError(nameIssue);
+                      return;
+                    }
+                    setOnboardingStep(2);
+                  }}
                   disabled={!ceoName.trim()}
                 >
                   Next — Set Core Rules →
@@ -1465,6 +1625,13 @@ const OfficeCanvas: React.FC = () => {
                     Enter the Office →
                   </button>
                 </div>
+
+                <button
+                  className="onboarding-skip-btn"
+                  onClick={handleOnboardingComplete}
+                >
+                  Skip for now — I'll add a key later
+                </button>
               </>
             )}
           </div>
@@ -1479,7 +1646,57 @@ const OfficeCanvas: React.FC = () => {
         </div>
         <button disabled={!onboardingDone} onClick={() => setShowTaskForm(true)}>New Task</button>
         <button disabled={!onboardingDone} onClick={() => setShowMeetingRoom(true)}>Meeting Room</button>
-        <button disabled={!onboardingDone} onClick={openHireWizard}>Hire Agent</button>
+        <button
+          disabled={!onboardingDone}
+          className={showHireNudge ? 'hire-nudge-pulse' : ''}
+          onClick={() => { setShowHireNudge(false); openHireWizard(); }}
+        >
+          Hire Agent
+        </button>
+
+        {/* View mode toggle */}
+        <div className="view-mode-toggle">
+          <button
+            className={`view-toggle-btn${viewMode === 'office' ? ' active' : ''}`}
+            disabled={!onboardingDone}
+            onClick={() => { setViewMode('office'); localStorage.setItem('agentdesk-view-mode', 'office'); }}>
+            Office
+          </button>
+          <button
+            className={`view-toggle-btn${viewMode === 'dashboard' ? ' active' : ''}`}
+            disabled={!onboardingDone}
+            onClick={() => { setViewMode('dashboard'); localStorage.setItem('agentdesk-view-mode', 'dashboard'); }}>
+            <LayoutDashboard size={12} style={{ marginRight: 4 }} />
+            Dashboard
+          </button>
+        </div>
+
+        {/* Advanced dropdown — Rules, Routing, Whiteboard */}
+        <div className="advanced-dropdown-wrap" style={{ position: 'relative' }}>
+          <button
+            disabled={!onboardingDone}
+            className={`advanced-toggle-btn${showAdvancedMenu ? ' open' : ''}`}
+            onClick={() => setShowAdvancedMenu(!showAdvancedMenu)}>
+            Advanced <ChevronDown size={12} style={{ transform: showAdvancedMenu ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+          </button>
+          {showAdvancedMenu && (
+            <div className="advanced-dropdown" onClick={() => setShowAdvancedMenu(false)}>
+              <button onClick={() => setShowRulesDashboard(true)}>
+                <ClipboardList size={14} /> Rules Dashboard
+                {pendingSuggestionsCount > 0 && (
+                  <span className="adv-badge">{pendingSuggestionsCount}</span>
+                )}
+              </button>
+              <button onClick={() => setShowRoutingInsights(true)}>
+                <Sparkles size={14} /> Routing Insights
+              </button>
+              <button onClick={() => setShowWhiteboard(true)}>
+                <Palette size={14} /> Whiteboard
+              </button>
+            </div>
+          )}
+        </div>
+
         <button disabled={!onboardingDone} onClick={togglePause}>{isPaused ? 'Resume' : 'Pause'}</button>
         <button disabled={!onboardingDone} onClick={resetOffice}>Reset</button>
         <div className={`user-icon${!onboardingDone ? ' disabled' : ''}`} onClick={() => onboardingDone && setShowAccountSettings(true)} title="Account Settings">
@@ -1490,7 +1707,23 @@ const OfficeCanvas: React.FC = () => {
         </div>
       </div>
 
-      <div className="left-sidebar">
+      {/* Hire Agent nudge toast — shown when user skips Step 3 */}
+      {showHireNudge && (
+        <div className="hire-nudge-toast">
+          <span>When you're ready, add your first API key here →</span>
+          <button onClick={() => setShowHireNudge(false)}>✕</button>
+        </div>
+      )}
+
+      {/* Checkout return toast */}
+      {checkoutToast && (
+        <div className={`checkout-toast checkout-toast-${checkoutToast.type}`}>
+          <span>{checkoutToast.type === 'success' ? '🎉' : 'ℹ️'} {checkoutToast.message}</span>
+          <button onClick={() => setCheckoutToast(null)}>✕</button>
+        </div>
+      )}
+
+      <div className="left-sidebar" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
         {/* Live Task Feed */}
         <div className="ui-panel task-feed-panel">
           <div className="task-feed-header" onClick={() => setShowFeedPanel(true)} style={{ cursor: 'pointer' }}>
@@ -1506,7 +1739,7 @@ const OfficeCanvas: React.FC = () => {
             </span>
           </div>
 
-          <div className="feed-tasks-scroll">
+          <div className="feed-tasks-scroll" onClick={() => setShowFeedPanel(true)}>
             {/* Active tasks with controls */}
             {tasks.filter(t => t.status === 'in-progress').length > 0 && (
               <div className="active-tasks-feed">
@@ -1529,58 +1762,54 @@ const OfficeCanvas: React.FC = () => {
               </div>
             )}
 
-            {/* Failed tasks */}
-            {tasks.filter(t => t.status === 'failed').length > 0 && (
-              <div className="failed-tasks-feed">
-                {tasks.filter(t => t.status === 'failed').slice(-3).reverse().map(task => {
-                  const agent = agents.find(a => a.id === task.assignee);
-                  return (
-                    <div key={task.id} className="feed-task failed has-result"
-                         onClick={() => setViewingFailedTask(task.id)}
-                         style={{ cursor: 'pointer' }}>
-                      <div className="feed-task-header">
-                        <span className="feed-task-status error">Failed</span>
-                        <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
-                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
-                          <Trash2 size={11} />
-                        </button>
+            {/* Completed & failed tasks — most recent first */}
+            {tasks.filter(t => t.status === 'completed' || t.status === 'failed').length > 0 && (
+              <div className="finished-tasks-feed">
+                {[...tasks.filter(t => t.status === 'completed' || t.status === 'failed')]
+                  .sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt))
+                  .slice(0, 8)
+                  .map(task => {
+                    const agent = agents.find(a => a.id === task.assignee);
+                    if (task.status === 'failed') {
+                      return (
+                        <div key={task.id} className="feed-task failed has-result"
+                             onClick={() => setViewingFailedTask(task.id)}
+                             style={{ cursor: 'pointer' }}>
+                          <div className="feed-task-header">
+                            <span className="feed-task-status error">Failed</span>
+                            <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+                            <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                          <div className="feed-task-title">{task.name}</div>
+                          <div className="feed-task-error">{task.errorMessage || 'Something went wrong. Check your API key and billing.'}</div>
+                          <div className="feed-task-view">Click to view details</div>
+                        </div>
+                      );
+                    }
+                    const hasResult = !!taskResults[task.id];
+                    return (
+                      <div key={task.id} className={`feed-task completed${hasResult ? ' has-result' : ''}`}
+                           onClick={() => hasResult && setViewingTaskResult(task.id)}>
+                        <div className="feed-task-header">
+                          <span className="feed-task-status done">Done</span>
+                          <span className="feed-task-cost">${task.cost?.toFixed(4) || '---'}</span>
+                          <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                        <div className="feed-task-title">{task.name}</div>
+                        <div className="feed-task-meta">
+                          <span>{agent?.name}</span>
+                          <span>{task.modelUsed}</span>
+                        </div>
+                        {hasResult && (
+                          <div className="feed-task-view">Click to view result</div>
+                        )}
                       </div>
-                      <div className="feed-task-title">{task.name}</div>
-                      <div className="feed-task-error">{task.errorMessage || 'Something went wrong. Check your API key and billing.'}</div>
-                      <div className="feed-task-view">Click to view details</div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Completed tasks */}
-            {tasks.filter(t => t.status === 'completed').length > 0 && (
-              <div className="completed-tasks-feed">
-                {tasks.filter(t => t.status === 'completed').slice(-5).reverse().map(task => {
-                  const agent = agents.find(a => a.id === task.assignee);
-                  const hasResult = !!taskResults[task.id];
-                  return (
-                    <div key={task.id} className={`feed-task completed${hasResult ? ' has-result' : ''}`}
-                         onClick={() => hasResult && setViewingTaskResult(task.id)}>
-                      <div className="feed-task-header">
-                        <span className="feed-task-status done">Done</span>
-                        <span className="feed-task-cost">${task.cost?.toFixed(4) || '---'}</span>
-                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                      <div className="feed-task-title">{task.name}</div>
-                      <div className="feed-task-meta">
-                        <span>{agent?.name}</span>
-                        <span>{task.modelUsed}</span>
-                      </div>
-                      {hasResult && (
-                        <div className="feed-task-view">Click to view result</div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             )}
 
@@ -1596,8 +1825,8 @@ const OfficeCanvas: React.FC = () => {
           )}
 
           {/* Activity log */}
-          <div className="activity-log">
-            <div className="activity-log-header" onClick={() => setShowWhiteboard(true)} style={{ cursor: 'pointer' }}>
+          <div className="activity-log" onClick={() => setShowFeedPanel(true)} style={{ cursor: 'pointer' }}>
+            <div className="activity-log-header">
               Activity Log
             </div>
             <div className="task-log">
@@ -1625,7 +1854,7 @@ const OfficeCanvas: React.FC = () => {
 
       </div>
 
-      <div className="right-sidebar">
+      <div className="right-sidebar" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
         <div className="agents-panel">
           <h3>Team</h3>
           <div className="agents-grid">
@@ -1649,39 +1878,120 @@ const OfficeCanvas: React.FC = () => {
           </div>
         </div>
 
-        <div className="rules-panel" onClick={() => setShowRulesDashboard(true)}>
-          <h3>
-            Rules
-            {pendingSuggestionsCount > 0 && (
-              <span style={{ background: '#ff6b6b', color: '#fff', fontSize: 9, padding: '1px 5px', borderRadius: 8, marginLeft: 6, verticalAlign: 'middle' }}>
-                {pendingSuggestionsCount}
-              </span>
-            )}
-          </h3>
-          {corePresetName && (
-            <div style={{ fontSize: 10, color: '#667eea', marginBottom: 6, fontWeight: 600 }}>
-              Core: {corePresetName}
-            </div>
-          )}
-          <div className="rules-count">{rulesCount} custom active</div>
-          <div className="rules-preview">
-            {rulesPreview.slice(0, 3).map((title, i) => (
-              <div key={i} className="rule-item">• {title.substring(0, 40)}{title.length > 40 ? '...' : ''}</div>
-            ))}
-            {rulesPreview.length === 0 && rulesCount === 0 && (
-              <div className="rule-item empty">No custom rules</div>
-            )}
-          </div>
-          <div style={{ marginTop: '8px', fontSize: '10px', color: '#888', textAlign: 'center' }}>
-            Click to manage
-          </div>
-        </div>
+        {/* Rules and Routing Insights moved to Advanced dropdown in toolbar */}
       </div>
+
+      {/* Power Mode Dashboard */}
+      {viewMode === 'dashboard' && (
+        <DashboardView
+          agents={agents}
+          tasks={tasks}
+          deskAssignments={deskAssignments}
+          todayApiCost={todayApiCost}
+          taskLog={taskLog}
+          taskResults={taskResults}
+          onAgentClick={(agent) => setChatAgent(agent)}
+          onCreateTask={() => setShowTaskForm(true)}
+          onOpenCostPanel={() => setShowCostPanel(true)}
+          onViewTaskResult={(taskId) => setViewingTaskResult(taskId)}
+          onViewFailedTask={(taskId) => setViewingFailedTask(taskId)}
+          onRemoveTask={(taskId) => removeTask(taskId)}
+        />
+      )}
 
       {showTaskForm && (
         <div className="task-form-overlay">
           <div className="task-form">
             <h2><ClipboardList size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8 }} />Create New Task</h2>
+
+            <div className="form-group">
+              <label>Task Title:</label>
+              <input
+                type="text"
+                value={taskTitle}
+                onChange={(e) => {
+                  setTaskTitle(e.target.value);
+                  triggerRouting(e.target.value, taskDescription);
+                }}
+                placeholder="e.g., Build login API"
+                autoFocus
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Instructions:</label>
+              <textarea
+                value={taskDescription}
+                onChange={(e) => {
+                  setTaskDescription(e.target.value);
+                  triggerRouting(taskTitle, e.target.value);
+                }}
+                placeholder="Describe what you want the agent to do..."
+                rows={3}
+              />
+            </div>
+
+            {/* ── Routing Suggestion Banner ── */}
+            {routingLoading && taskTitle.trim().length >= 5 && (
+              <div className="routing-suggestion loading">
+                <Sparkles size={14} className="routing-icon spin" />
+                <span>Analyzing best desk for this task...</span>
+              </div>
+            )}
+
+            {routingSuggestions && routingSuggestions.length > 0 && !routingDismissed && (
+              <div className="routing-suggestion">
+                <div className="routing-header">
+                  <Sparkles size={14} className="routing-icon" />
+                  <span className="routing-title">Recommended Desk</span>
+                </div>
+                <div className="routing-main">
+                  <div className="routing-desk-name">
+                    {routingSuggestions[0].deskName}
+                    <span className="routing-agent-name">({routingSuggestions[0].agentName})</span>
+                    <span className="routing-confidence">{Math.round(routingSuggestions[0].confidence * 100)}% match</span>
+                  </div>
+                  <div className="routing-reasoning">{routingSuggestions[0].reasoning}</div>
+                  {routingSuggestions[0].estimatedCost > 0 && (
+                    <div className="routing-cost">
+                      Est. cost: ~${routingSuggestions[0].estimatedCost.toFixed(4)}
+                      {routingSuggestions[1] && routingSuggestions[1].estimatedCost > 0 && (
+                        <span className="routing-cost-alt"> vs ~${routingSuggestions[1].estimatedCost.toFixed(4)} ({routingSuggestions[1].deskName})</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {routingSuggestions.length > 1 && (
+                  <div className="routing-alt">
+                    Also suitable: {routingSuggestions[1].deskName} — {Math.round(routingSuggestions[1].confidence * 100)}% match
+                  </div>
+                )}
+                <div className="routing-actions">
+                  <button
+                    className="routing-accept"
+                    onClick={() => {
+                      // Find the agent for this desk
+                      const suggestion = routingSuggestions[0];
+                      const matchedAssignment = deskAssignments.find(a => a.backendDeskId === suggestion.deskId);
+                      if (matchedAssignment) {
+                        const agentId = `agent-${matchedAssignment.deskId}`;
+                        const matchedAgent = agents.find(a => a.id === agentId);
+                        if (matchedAgent) {
+                          setSelectedAgent(agentId);
+                        }
+                      }
+                      setRoutingDismissed(true);
+                    }}>
+                    Use this desk
+                  </button>
+                  <button
+                    className="routing-dismiss"
+                    onClick={() => setRoutingDismissed(true)}>
+                    Choose manually
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="form-group">
               <label>Select Agent:</label>
@@ -1707,31 +2017,11 @@ const OfficeCanvas: React.FC = () => {
               </div>
             )}
 
-            <div className="form-group">
-              <label>Task Title:</label>
-              <input
-                type="text"
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                placeholder="e.g., Build login API"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Instructions:</label>
-              <textarea
-                value={taskDescription}
-                onChange={(e) => setTaskDescription(e.target.value)}
-                placeholder="Describe what you want the agent to do..."
-                rows={4}
-              />
-            </div>
-
             <div className="form-buttons">
               <button onClick={assignTask} disabled={!selectedAgent || !taskTitle}>
                 Assign Task
               </button>
-              <button onClick={() => setShowTaskForm(false)} className="secondary">
+              <button onClick={() => { setShowTaskForm(false); setRoutingSuggestions(null); setRoutingDismissed(false); }} className="secondary">
                 Cancel
               </button>
             </div>
@@ -1761,6 +2051,7 @@ const OfficeCanvas: React.FC = () => {
             <div className="feed-panel-header">
               <h2><Rss size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />Live Feed</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button className="feed-whiteboard-btn" onClick={() => { setShowFeedPanel(false); setShowWhiteboard(true); }}>Whiteboard</button>
                 {tasks.length > 0 && (
                   <button className="feed-clear-btn" onClick={clearTasks}>Clear All</button>
                 )}
@@ -1790,58 +2081,53 @@ const OfficeCanvas: React.FC = () => {
               </div>
             )}
 
-            {tasks.filter(t => t.status === 'failed').length > 0 && (
+            {tasks.filter(t => t.status === 'completed' || t.status === 'failed').length > 0 && (
               <div className="feed-section">
-                <h3>Failed ({tasks.filter(t => t.status === 'failed').length})</h3>
-                {tasks.filter(t => t.status === 'failed').map(task => {
-                  const agent = agents.find(a => a.id === task.assignee);
-                  return (
-                    <div key={task.id} className="feed-task failed has-result"
-                         onClick={() => setViewingFailedTask(task.id)}
-                         style={{ cursor: 'pointer' }}>
-                      <div className="feed-task-header">
-                        <span className="feed-task-status error">Failed</span>
-                        <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
-                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
-                          <Trash2 size={11} />
-                        </button>
+                <h3>Completed & Failed ({tasks.filter(t => t.status === 'completed' || t.status === 'failed').length})</h3>
+                {[...tasks.filter(t => t.status === 'completed' || t.status === 'failed')]
+                  .sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt))
+                  .map(task => {
+                    const agent = agents.find(a => a.id === task.assignee);
+                    if (task.status === 'failed') {
+                      return (
+                        <div key={task.id} className="feed-task failed has-result"
+                             onClick={() => setViewingFailedTask(task.id)}
+                             style={{ cursor: 'pointer' }}>
+                          <div className="feed-task-header">
+                            <span className="feed-task-status error">Failed</span>
+                            <span className="feed-task-agent">{agent?.name || 'Agent'}</span>
+                            <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                          <div className="feed-task-title">{task.name}</div>
+                          <div className="feed-task-error">{task.errorMessage || 'Something went wrong. Check your API key and billing.'}</div>
+                          <div className="feed-task-view">Click to view details</div>
+                        </div>
+                      );
+                    }
+                    const hasResult = !!taskResults[task.id];
+                    return (
+                      <div key={task.id} className={`feed-task completed${hasResult ? ' has-result' : ''}`}
+                           onClick={() => { if (hasResult) { setShowFeedPanel(false); setViewingTaskResult(task.id); } }}>
+                        <div className="feed-task-header">
+                          <span className="feed-task-status done">Done</span>
+                          <span className="feed-task-cost">${task.cost?.toFixed(4) || '---'}</span>
+                          <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                        <div className="feed-task-title">{task.name}</div>
+                        <div className="feed-task-meta">
+                          <span>{agent?.name}</span>
+                          <span>{task.modelUsed}</span>
+                        </div>
+                        {hasResult && (
+                          <div className="feed-task-view">Click to view result</div>
+                        )}
                       </div>
-                      <div className="feed-task-title">{task.name}</div>
-                      <div className="feed-task-error">{task.errorMessage || 'Something went wrong. Check your API key and billing.'}</div>
-                      <div className="feed-task-view">Click to view details</div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {tasks.filter(t => t.status === 'completed').length > 0 && (
-              <div className="feed-section">
-                <h3>Completed ({tasks.filter(t => t.status === 'completed').length})</h3>
-                {tasks.filter(t => t.status === 'completed').map(task => {
-                  const agent = agents.find(a => a.id === task.assignee);
-                  const hasResult = !!taskResults[task.id];
-                  return (
-                    <div key={task.id} className={`feed-task completed${hasResult ? ' has-result' : ''}`}
-                         onClick={() => { if (hasResult) { setShowFeedPanel(false); setViewingTaskResult(task.id); } }}>
-                      <div className="feed-task-header">
-                        <span className="feed-task-status done">Done</span>
-                        <span className="feed-task-cost">${task.cost?.toFixed(4) || '---'}</span>
-                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
-                      <div className="feed-task-title">{task.name}</div>
-                      <div className="feed-task-meta">
-                        <span>{agent?.name}</span>
-                        <span>{task.modelUsed}</span>
-                      </div>
-                      {hasResult && (
-                        <div className="feed-task-view">Click to view result</div>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             )}
 
@@ -2225,10 +2511,16 @@ const OfficeCanvas: React.FC = () => {
           current={upgradePrompt.current}
           max={upgradePrompt.max}
           onClose={() => setUpgradePrompt(null)}
-          onUpgrade={() => {
+          onUpgrade={async () => {
             setUpgradePrompt(null);
-            setSettingsTab('billing');
-            setShowAccountSettings(true);
+            try {
+              const { checkoutUrl } = await createCheckoutSession('pro', 'upgrade');
+              window.location.href = checkoutUrl;
+            } catch {
+              // Fallback to settings modal if checkout fails
+              setSettingsTab('billing');
+              setShowAccountSettings(true);
+            }
           }}
         />
       )}
@@ -2251,6 +2543,11 @@ const OfficeCanvas: React.FC = () => {
             agentName: agent?.name || 'Agent',
           };
         })}
+      />
+
+      <RoutingInsightsModal
+        show={showRoutingInsights}
+        onClose={() => setShowRoutingInsights(false)}
       />
 
       {chatAgent && (

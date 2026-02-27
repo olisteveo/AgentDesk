@@ -6,6 +6,14 @@ import { apiRequest } from './client';
 
 // ── Types ────────────────────────────────────────────────────
 
+export interface RoutingConfig {
+  auto_approve?: boolean;
+  auto_approve_confidence_threshold?: number;
+  optimization_goal?: 'quality' | 'cost' | 'balanced' | 'speed';
+  auto_approve_cost_rules?: boolean;
+  max_auto_cost_savings_pct?: number;
+}
+
 export interface TeamInfo {
   id: string;
   name: string;
@@ -14,6 +22,7 @@ export interface TeamInfo {
   max_desks: number;
   monthly_budget_usd: number;
   billing_email: string | null;
+  routing_config?: RoutingConfig;
   created_at: string;
 }
 
@@ -72,7 +81,7 @@ export function getTeam(): Promise<TeamInfo> {
 
 /** Update team name or billing email. */
 export function updateTeam(
-  data: Partial<{ name: string; billingEmail: string }>,
+  data: Partial<{ name: string; billingEmail: string; routingConfig: RoutingConfig }>,
 ): Promise<TeamInfo> {
   return apiRequest('/api/team', {
     method: 'PATCH',

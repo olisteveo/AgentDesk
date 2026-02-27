@@ -39,6 +39,22 @@
 
 /* ── Logo + heading ─────────────────────────────────────── */
 
+.auth-logo-link {
+  display: block;
+  text-align: center;
+  margin: 0 auto 28px;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.auth-logo-link:hover {
+  opacity: 0.8;
+}
+
+.auth-logo-link .auth-logo {
+  margin: 0 auto;
+}
+
 .auth-logo {
   display: block;
   margin: 0 auto 28px;
@@ -112,6 +128,12 @@
 .form-error {
   color: #ff6b6b;
   font-size: 12px;
+}
+
+.form-hint {
+  color: #666;
+  font-size: 11px;
+  margin-top: 2px;
 }
 
 .form-error-global {
@@ -231,6 +253,97 @@
 @keyframes auth-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Verify-email pages ─────────────────────────────────── */
+
+.auth-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.auth-description {
+  color: #aaa;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 28px;
+  text-align: center;
+}
+
+.auth-description strong {
+  color: #667eea;
+}
+
+.auth-success-text {
+  color: #4ade80;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.auth-error-text {
+  color: #ff6b6b;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.auth-button-secondary {
+  width: 100%;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #333;
+  border-radius: 8px;
+  color: #aaa;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.auth-button-secondary:hover:not(:disabled) {
+  border-color: #555;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-button-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-button-ghost {
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.auth-button-ghost:hover {
+  color: #aaa;
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.auth-status-icon {
+  font-size: 40px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.auth-status-icon.success { color: #4ade80; }
+.auth-status-icon.error { color: #ff6b6b; }
 
 /* ── Responsive ──────────────────────────────────────────── */
 
