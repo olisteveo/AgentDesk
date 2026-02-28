@@ -164,3 +164,19 @@
   color: #555;
   background: #eceef8;
 }
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .upgrade-prompt-close {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .upgrade-prompt-btn {
+    min-height: 48px;
+  }
+}

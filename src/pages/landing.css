@@ -224,6 +224,82 @@
   margin: 0;
 }
 
+/* ── Memory highlight ─────────────────────────────────────── */
+
+.landing-memory {
+  padding-bottom: 60px;
+}
+
+.landing-memory-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.landing-memory-card {
+  background: rgba(162, 155, 254, 0.04);
+  border: 1px solid rgba(162, 155, 254, 0.15);
+  border-radius: 16px;
+  padding: 28px 24px;
+  transition: border-color 0.3s, transform 0.3s;
+}
+
+.landing-memory-card:hover {
+  border-color: rgba(162, 155, 254, 0.4);
+  transform: translateY(-3px);
+}
+
+.landing-memory-card--hero {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(162, 155, 254, 0.06) 0%, rgba(102, 126, 234, 0.04) 100%);
+  border-color: rgba(162, 155, 254, 0.2);
+  padding: 36px 32px;
+}
+
+.landing-memory-card--hero:hover {
+  border-color: rgba(162, 155, 254, 0.5);
+}
+
+.landing-memory-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(162, 155, 254, 0.15), rgba(118, 75, 162, 0.1));
+  border: 1px solid rgba(162, 155, 254, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a29bfe;
+  margin-bottom: 16px;
+  box-shadow:
+    0 4px 12px rgba(162, 155, 254, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.landing-memory-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.landing-memory-card--hero h3 {
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+
+.landing-memory-card p {
+  font-size: 13px;
+  color: #999;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.landing-memory-card--hero p {
+  font-size: 14px;
+  line-height: 1.7;
+  max-width: 680px;
+}
+
 /* ── Governance highlight ────────────────────────────────── */
 
 .landing-governance {
@@ -451,6 +527,14 @@
     grid-template-columns: 1fr;
   }
 
+  .landing-memory-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-memory-card--hero {
+    padding: 24px 20px;
+  }
+
   .landing-governance-grid {
     grid-template-columns: 1fr;
   }
@@ -479,5 +563,29 @@
   .landing-footer-links {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-hero-title {
+    font-size: 26px;
+  }
+
+  .landing-hero-subtitle {
+    font-size: 14px;
+  }
+
+  .landing-hero-cta .landing-btn {
+    width: 100%;
+    text-align: center;
+    min-height: 48px;
+  }
+
+  .landing-section-title {
+    font-size: 22px;
+  }
+
+  .landing-nav-logo {
+    width: 40px;
   }
 }

@@ -46,6 +46,22 @@
   --warning: #feca57;
   --warning-bg: rgba(254, 202, 87, 0.12);
   --info: #54a0ff;
+
+  /* Layout */
+  --nav-height: 60px;
+  --nav-height-mobile: 56px;
+
+  /* Mobile safe areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Tap targets */
+  --min-tap: 44px;
+
+  /* Dynamic viewport height (falls back for older browsers) */
+  --vh-full: 100dvh;
 }
 
 /* Light theme */

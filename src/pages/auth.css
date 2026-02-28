@@ -347,12 +347,16 @@
 
 /* ── Responsive ──────────────────────────────────────────── */
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .auth-card {
     padding: 32px 24px;
   }
 
   .auth-title {
     font-size: 22px;
+  }
+
+  .auth-submit-btn {
+    min-height: 48px;
   }
 }

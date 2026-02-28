@@ -8,7 +8,7 @@
   display: grid;
   grid-template-columns: 260px 1fr 280px;
   gap: 16px;
-  height: calc(100vh - 56px);
+  height: calc(var(--vh-full, 100vh) - 56px);
   padding: 16px;
   box-sizing: border-box;
   overflow: hidden;
@@ -529,29 +529,76 @@
   line-height: 1.5;
 }
 
-/* ── Responsive ───────────────────────────────────────────── */
+/* ── Responsive: Tablet ───────────────────────────────────── */
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .dv-container {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr auto;
     height: auto;
+    min-height: calc(var(--vh-full, 100vh) - 56px);
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px;
+    gap: 12px;
   }
 
   .dv-left {
     flex-direction: row;
     overflow-x: auto;
     gap: 8px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .dv-agent-card {
-    min-width: 180px;
+    min-width: 160px;
     margin-bottom: 0;
+    flex-shrink: 0;
   }
 
   .dv-stats-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dv-task-filters {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .dv-filter-btn {
+    flex-shrink: 0;
+  }
+
+  .dv-create-btn {
+    min-height: 40px;
+  }
+}
+
+/* ── Responsive: Small phone ──────────────────────────────── */
+
+@media (max-width: 480px) {
+  .dv-container {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .dv-agent-card {
+    min-width: 140px;
+    padding: 10px;
+  }
+
+  .dv-stat-card {
+    padding: 10px;
+  }
+
+  .dv-stat-value {
+    font-size: 16px;
+  }
+
+  .dv-task-card {
+    padding: 12px;
   }
 }
 

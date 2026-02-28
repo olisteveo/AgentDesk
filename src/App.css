@@ -19,3 +19,29 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* ── Mobile base styles ─────────────────────────────────── */
+
+@supports (height: 100dvh) {
+  :root { --vh-full: 100dvh; }
+}
+@supports not (height: 100dvh) {
+  :root { --vh-full: 100vh; }
+}
+
+@media (max-width: 768px) {
+  button, a, [role="button"], input[type="submit"] {
+    min-height: var(--min-tap, 44px);
+    min-width: var(--min-tap, 44px);
+  }
+
+  /* Prevent double-tap zoom on interactive elements */
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+
+  /* Smoother scrolling on iOS */
+  .scrollable {
+    -webkit-overflow-scrolling: touch;
+  }
+}

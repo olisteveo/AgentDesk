@@ -438,7 +438,7 @@ label.participant-checkbox input[type="checkbox"] {
   width: 95%;
   max-width: 1000px;
   height: 85vh;
-  max-height: calc(100vh - 40px);
+  max-height: calc(var(--vh-full, 100vh) - 40px);
   display: flex;
   flex-direction: column;
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.9);

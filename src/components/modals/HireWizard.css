@@ -937,9 +937,25 @@
   line-height: 1.5;
 }
 
-/* ── Responsive for archetype grid ────────────────────────── */
+/* ── Responsive ──────────────────────────────────────────── */
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
+  .hire-wizard {
+    width: 100%;
+    max-width: 100%;
+    max-height: var(--vh-full, 100vh);
+    height: var(--vh-full, 100vh);
+    border-radius: 0;
+    padding: 20px;
+    padding-bottom: calc(20px + var(--safe-bottom, 0px));
+  }
+
+  .archetype-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 400px) {
   .archetype-grid {
     grid-template-columns: 1fr;
   }

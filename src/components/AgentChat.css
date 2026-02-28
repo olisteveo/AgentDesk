@@ -709,9 +709,25 @@
 
 /* ── Responsive ────────────────────────────────────────────── */
 
-@media (max-width: 500px) {
+@media (max-width: 768px) {
   .ac-panel {
     width: 100%;
+    height: var(--vh-full, 100vh);
+    border-radius: 0;
+    border-left: none;
+  }
+
+  .ac-input-area {
+    padding-bottom: calc(14px + var(--safe-bottom, 0px));
+  }
+
+  .ac-icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .ac-overlay {
+    justify-content: stretch;
   }
 }
 

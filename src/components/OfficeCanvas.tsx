@@ -8,6 +8,7 @@ import { createTask, runTask as runTaskApi, openCode } from '../api/tasks';
 import type { Desk as BackendDesk } from '../api/desks';
 import type { Task, DeskAssignment, Agent, Zone, Particle, SpriteDirection } from '../types';
 import { useActivityLog } from '../hooks/useActivityLog';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useCostTracker } from '../hooks/useCostTracker';
 import { useTaskManager } from '../hooks/useTaskManager';
 import { isCodeRelatedTask } from '../utils/codeDetection';
@@ -225,9 +226,16 @@ const OfficeCanvas: React.FC = () => {
   const [showAdvancedMenu, setShowAdvancedMenu] = useState(false);
 
   // View mode toggle: 'office' (pixel canvas) or 'dashboard' (power mode)
+  const isMobile = useIsMobile(768);
   const [viewMode, setViewMode] = useState<'office' | 'dashboard'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) return 'dashboard';
     try { return (localStorage.getItem('agentdesk-view-mode') as 'office' | 'dashboard') || 'office'; } catch { return 'office'; }
   });
+
+  // Force dashboard mode on mobile (canvas doesn't fit small screens)
+  useEffect(() => {
+    if (isMobile && viewMode !== 'dashboard') setViewMode('dashboard');
+  }, [isMobile]);
 
   // Global theme — persisted, applied to document root so all components inherit
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -1770,61 +1778,76 @@ const OfficeCanvas: React.FC = () => {
           Hire Agent
         </button>
 
-        {/* View mode + theme toggle */}
-        <div className="view-mode-toggle">
-          <button
-            className={`view-toggle-btn${viewMode === 'office' ? ' active' : ''}`}
-            disabled={!onboardingDone}
-            onClick={() => { setViewMode('office'); localStorage.setItem('agentdesk-view-mode', 'office'); }}>
-            Office
-          </button>
-          <button
-            className={`view-toggle-btn${viewMode === 'dashboard' ? ' active' : ''}`}
-            disabled={!onboardingDone}
-            onClick={() => { setViewMode('dashboard'); localStorage.setItem('agentdesk-view-mode', 'dashboard'); }}>
-            <LayoutDashboard size={12} style={{ marginRight: 4 }} />
-            Dashboard
-          </button>
-          {viewMode === 'dashboard' && (
+        {/* View mode + theme toggle (hidden on mobile — forced to dashboard) */}
+        {!isMobile && (
+          <div className="view-mode-toggle">
             <button
-              className="theme-toggle-btn"
+              className={`view-toggle-btn${viewMode === 'office' ? ' active' : ''}`}
               disabled={!onboardingDone}
-              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              onClick={() => { setViewMode('office'); localStorage.setItem('agentdesk-view-mode', 'office'); }}>
+              Office
             </button>
-          )}
-        </div>
+            <button
+              className={`view-toggle-btn${viewMode === 'dashboard' ? ' active' : ''}`}
+              disabled={!onboardingDone}
+              onClick={() => { setViewMode('dashboard'); localStorage.setItem('agentdesk-view-mode', 'dashboard'); }}>
+              <LayoutDashboard size={12} style={{ marginRight: 4 }} />
+              Dashboard
+            </button>
+            {viewMode === 'dashboard' && (
+              <button
+                className="theme-toggle-btn"
+                disabled={!onboardingDone}
+                onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+            )}
+          </div>
+        )}
+        {/* Mobile: just show theme toggle */}
+        {isMobile && (
+          <button
+            className="theme-toggle-btn"
+            disabled={!onboardingDone}
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+        )}
 
         {/* Advanced dropdown — Rules, Routing, Whiteboard */}
-        <div className="advanced-dropdown-wrap" style={{ position: 'relative' }}>
-          <button
-            disabled={!onboardingDone}
-            className={`advanced-toggle-btn${showAdvancedMenu ? ' open' : ''}`}
-            onClick={() => setShowAdvancedMenu(!showAdvancedMenu)}>
-            Advanced <ChevronDown size={12} style={{ transform: showAdvancedMenu ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
-          </button>
-          {showAdvancedMenu && (
-            <div className="advanced-dropdown" onClick={() => setShowAdvancedMenu(false)}>
-              <button onClick={() => setShowRulesDashboard(true)}>
-                <ClipboardList size={14} /> Rules Dashboard
-                {pendingSuggestionsCount > 0 && (
-                  <span className="adv-badge">{pendingSuggestionsCount}</span>
-                )}
-              </button>
-              <button onClick={() => setShowRoutingInsights(true)}>
-                <Sparkles size={14} /> Routing Insights
-              </button>
-              <button onClick={() => setShowWhiteboard(true)}>
-                <Palette size={14} /> Whiteboard
-              </button>
-            </div>
-          )}
-        </div>
+        {!isMobile && (
+          <div className="advanced-dropdown-wrap" style={{ position: 'relative' }}>
+            <button
+              disabled={!onboardingDone}
+              className={`advanced-toggle-btn${showAdvancedMenu ? ' open' : ''}`}
+              onClick={() => setShowAdvancedMenu(!showAdvancedMenu)}>
+              Advanced <ChevronDown size={12} style={{ transform: showAdvancedMenu ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }} />
+            </button>
+            {showAdvancedMenu && (
+              <div className="advanced-dropdown" onClick={() => setShowAdvancedMenu(false)}>
+                <button onClick={() => setShowRulesDashboard(true)}>
+                  <ClipboardList size={14} /> Rules Dashboard
+                  {pendingSuggestionsCount > 0 && (
+                    <span className="adv-badge">{pendingSuggestionsCount}</span>
+                  )}
+                </button>
+                <button onClick={() => setShowRoutingInsights(true)}>
+                  <Sparkles size={14} /> Routing Insights
+                </button>
+                <button onClick={() => setShowWhiteboard(true)}>
+                  <Palette size={14} /> Whiteboard
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
-        <button disabled={!onboardingDone} onClick={togglePause}>{isPaused ? 'Resume' : 'Pause'}</button>
-        <button disabled={!onboardingDone} onClick={resetOffice}>Reset</button>
+        {!isMobile && <button disabled={!onboardingDone} onClick={togglePause}>{isPaused ? 'Resume' : 'Pause'}</button>}
+        {!isMobile && <button disabled={!onboardingDone} onClick={resetOffice}>Reset</button>}
         <div className={`user-icon${!onboardingDone ? ' disabled' : ''}`} onClick={() => onboardingDone && setShowAccountSettings(true)} title="Account Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>

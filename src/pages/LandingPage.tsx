@@ -22,6 +22,9 @@ import {
   ListTodo,
   TrendingUp,
   BookOpen,
+  Brain,
+  Lock,
+  Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import './landing.css';
@@ -29,6 +32,11 @@ import './landing.css';
 // ── Section data ────────────────────────────────────────────
 
 const FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
+  {
+    icon: Brain,
+    title: 'Persistent Agent Memory',
+    desc: 'Every agent remembers past conversations, tasks, and meetings. Knowledge compounds over time — your agents get smarter the more you use them.',
+  },
   {
     icon: Cpu,
     title: 'Multi-Model Support',
@@ -151,8 +159,8 @@ export function LandingPage() {
           <span className="landing-hero-accent">Visualised</span>
         </h1>
         <p className="landing-hero-subtitle">
-          A virtual office for your AI agents. Assign tasks, set behavioural rules,
-          track costs, and collaborate across models — all in one place.
+          A virtual office for your AI agents. Assign tasks, build persistent memory,
+          set behavioural rules, track costs, and collaborate across models — all in one place.
         </p>
         <div className="landing-hero-cta">
           {isAuthenticated ? (
@@ -195,6 +203,60 @@ export function LandingPage() {
               <p className="landing-feature-desc">{f.desc}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── Memory highlight ─────────────────────────── */}
+      <section className="landing-section landing-memory">
+        <h2 className="landing-section-title">Agents That Actually Remember</h2>
+        <p className="landing-section-subtitle">
+          Most AI tools forget everything after each conversation. Agent Desk builds persistent
+          memory that makes every interaction richer than the last.
+        </p>
+
+        <div className="landing-memory-grid">
+          <div className="landing-memory-card landing-memory-card--hero">
+            <div className="landing-memory-icon">
+              <Brain size={28} strokeWidth={1.6} />
+            </div>
+            <h3>Three-Layer Memory Architecture</h3>
+            <p>
+              Episodic memories capture individual conversations and tasks.
+              Over time, a semantic compression layer distils long-term facts and knowledge.
+              Both layers are vector-indexed for instant contextual retrieval — so your agents
+              recall exactly what matters, right when it matters.
+            </p>
+          </div>
+          <div className="landing-memory-card">
+            <div className="landing-memory-icon">
+              <Zap size={20} strokeWidth={1.8} />
+            </div>
+            <h3>Automatic & Invisible</h3>
+            <p>
+              Memory generation fires in the background after every chat, task, and meeting.
+              No manual tagging. No copy-paste. Your agents just get smarter with use.
+            </p>
+          </div>
+          <div className="landing-memory-card">
+            <div className="landing-memory-icon">
+              <Lock size={20} strokeWidth={1.8} />
+            </div>
+            <h3>Encrypted & Private</h3>
+            <p>
+              All memories are encrypted at rest with AES-256-GCM. Content is automatically
+              sanitised — secrets, API keys, and PII are stripped before anything is stored.
+            </p>
+          </div>
+          <div className="landing-memory-card">
+            <div className="landing-memory-icon">
+              <Brain size={20} strokeWidth={1.8} />
+            </div>
+            <h3>You Stay In Control</h3>
+            <p>
+              Browse each agent's memories, view extracted facts with confidence scores,
+              delete individual memories, or wipe everything with one click. Full transparency.
+            </p>
+          </div>
         </div>
       </section>
 

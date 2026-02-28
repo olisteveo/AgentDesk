@@ -1,7 +1,7 @@
 .office-canvas-container {
   position: relative;
   width: 100vw;
-  min-height: 100vh;
+  min-height: var(--vh-full, 100vh);
   background: #050510;
   overflow: hidden;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -1148,10 +1148,47 @@
 /* Meeting Room styles moved to MeetingRoom.css */
 
 
-/* Responsive */
+/* ── Responsive: Tablet ────────────────────────────────────── */
 @media (max-width: 768px) {
-  .left-sidebar {
-    width: 200px;
+  .office-canvas-container {
+    padding-top: 56px;
+  }
+
+  .top-nav {
+    height: 56px;
+    padding: 0 60px 0 60px;
+    gap: 8px;
+  }
+
+  .top-nav-logo {
+    width: 36px;
+  }
+
+  .top-nav-title {
+    display: none;
+  }
+
+  .top-nav button {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .top-nav .top-nav-user-name {
+    display: none;
+  }
+
+  .top-nav .user-icon {
+    right: 12px;
+  }
+
+  .top-nav .top-nav-logout {
+    right: 54px;
+  }
+
+  .left-sidebar,
+  .right-sidebar,
+  .office-footer {
+    display: none;
   }
 
   .controls-right {
@@ -1163,6 +1200,31 @@
   .controls-right button {
     padding: 12px 20px;
     font-size: 13px;
+  }
+}
+
+/* ── Responsive: Small phone ──────────────────────────────── */
+@media (max-width: 480px) {
+  .top-nav {
+    padding: 0 52px;
+    gap: 6px;
+  }
+
+  .top-nav button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .top-nav-brand {
+    left: 12px;
+  }
+
+  .top-nav .user-icon {
+    right: 8px;
+  }
+
+  .top-nav .top-nav-logout {
+    right: 48px;
   }
 }
 
@@ -2709,4 +2771,26 @@
 [data-theme="light"] .advanced-dropdown button:hover {
   background: rgba(102, 126, 234, 0.08);
   color: #1a1a2e;
+}
+
+/* ── Mobile: Full-screen modals ──────────────────────────── */
+@media (max-width: 640px) {
+  .task-form {
+    width: 100%;
+    max-width: 100%;
+    height: var(--vh-full, 100vh);
+    border-radius: 0;
+    overflow-y: auto;
+    padding: 24px 20px;
+    padding-bottom: calc(24px + var(--safe-bottom, 0px));
+  }
+
+  .onboarding-modal {
+    max-width: 100%;
+    height: var(--vh-full, 100vh);
+    border-radius: 0;
+    overflow-y: auto;
+    padding: 24px 20px;
+    padding-bottom: calc(24px + var(--safe-bottom, 0px));
+  }
 }

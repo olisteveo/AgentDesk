@@ -881,3 +881,23 @@
 [data-theme="light"] .rd-core-picker-title {
   color: #1a1a2e;
 }
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .rd-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: var(--vh-full, 100vh);
+    height: var(--vh-full, 100vh);
+    border-radius: 0;
+  }
+
+  .rd-header {
+    padding: 16px 18px;
+  }
+
+  .rd-body {
+    padding: 16px 18px;
+  }
+}
