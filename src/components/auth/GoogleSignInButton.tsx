@@ -1,10 +1,13 @@
 /**
- * GoogleSignInButton — custom-styled button that triggers
- * Google One Tap / popup sign-in flow.
+ * GoogleSignInButton — robust Google sign-in with automatic fallback.
  *
- * Uses a hidden Google-rendered button and triggers its click
- * programmatically, so we get full control over styling while
- * keeping the official GIS credential flow.
+ * Strategy:
+ *   1. Try loading the official GIS library (accounts.google.com/gsi/client)
+ *   2. If GIS loads → use its popup credential flow (best UX)
+ *   3. If GIS is blocked (ad-blocker, extension, etc.) → fall back to
+ *      a manual OAuth popup that doesn't depend on any Google scripts
+ *
+ * The button is ALWAYS clickable — never silently disabled.
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
@@ -21,9 +24,11 @@ declare global {
         id: {
           initialize: (config: Record<string, unknown>) => void;
           renderButton: (el: HTMLElement, config: Record<string, unknown>) => void;
+          prompt: (callback?: (notification: { isNotDisplayed: () => boolean; isSkippedMoment: () => boolean }) => void) => void;
         };
       };
     };
+    __googleOAuthCallback?: (response: GoogleCredentialResponse) => void;
   }
 }
 
@@ -44,9 +49,11 @@ const GOOGLE_SVG = (
   </svg>
 );
 
+type ButtonState = 'loading' | 'ready' | 'blocked';
+
 export function GoogleSignInButton({ onSuccess, onError, label = 'Continue with Google' }: Props) {
   const hiddenRef = useRef<HTMLDivElement>(null);
-  const [ready, setReady] = useState(false);
+  const [state, setState] = useState<ButtonState>('loading');
 
   const handleCallback = useCallback(
     (response: GoogleCredentialResponse) => {
@@ -62,22 +69,38 @@ export function GoogleSignInButton({ onSuccess, onError, label = 'Continue with 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
 
+    let timeout: ReturnType<typeof setTimeout>;
+
     function init() {
-      if (!window.google || !hiddenRef.current) return;
+      if (!window.google || !hiddenRef.current) {
+        setState('blocked');
+        return;
+      }
 
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleCallback,
-      });
+      try {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleCallback,
+          ux_mode: 'popup',
+        });
 
-      // Render invisible Google button — we click it programmatically
-      window.google.accounts.id.renderButton(hiddenRef.current, {
-        type: 'icon',
-        size: 'large',
-      });
+        window.google.accounts.id.renderButton(hiddenRef.current, {
+          type: 'icon',
+          size: 'large',
+        });
 
-      setReady(true);
+        setState('ready');
+      } catch {
+        setState('blocked');
+      }
     }
+
+    // If GIS doesn't load within 3s, mark as blocked (ad blocker, etc.)
+    timeout = setTimeout(() => {
+      if (!window.google) {
+        setState('blocked');
+      }
+    }, 3000);
 
     const existing = document.getElementById('google-gsi');
     if (!existing) {
@@ -87,29 +110,105 @@ export function GoogleSignInButton({ onSuccess, onError, label = 'Continue with 
       script.async = true;
       script.defer = true;
       script.onload = () => {
-        // Small delay to let Google fully initialize
+        clearTimeout(timeout);
         setTimeout(init, 200);
       };
+      script.onerror = () => {
+        clearTimeout(timeout);
+        setState('blocked');
+      };
       document.head.appendChild(script);
-    } else {
+    } else if (window.google) {
+      clearTimeout(timeout);
       setTimeout(init, 200);
     }
+
+    return () => clearTimeout(timeout);
   }, [handleCallback]);
 
   if (!GOOGLE_CLIENT_ID) return null;
 
   const handleClick = () => {
-    // Find and click the hidden Google button's inner div/iframe
-    const googleBtn = hiddenRef.current?.querySelector('[role="button"]') as HTMLElement
-      ?? hiddenRef.current?.querySelector('div[style]') as HTMLElement;
-    if (googleBtn) {
-      googleBtn.click();
+    if (state === 'ready') {
+      // GIS is loaded — try clicking the hidden rendered button
+      const googleBtn = hiddenRef.current?.querySelector('[role="button"]') as HTMLElement
+        ?? hiddenRef.current?.querySelector('div[style]') as HTMLElement;
+      if (googleBtn) {
+        googleBtn.click();
+      } else {
+        // renderButton didn't create a clickable element — fall back to prompt
+        try {
+          window.google?.accounts.id.prompt();
+        } catch {
+          // prompt failed — fall through to direct OAuth
+          openOAuthPopup();
+        }
+      }
+    } else {
+      // GIS blocked or still loading — use direct OAuth popup (no Google scripts needed)
+      openOAuthPopup();
     }
+  };
+
+  /** Direct OAuth popup — works even when GIS is blocked by ad-blockers */
+  const openOAuthPopup = () => {
+    const redirectUri = window.location.origin;
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: redirectUri,
+      response_type: 'id_token',
+      scope: 'openid email profile',
+      nonce: crypto.randomUUID(),
+    });
+
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const popup = window.open(
+      `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+      'google-oauth',
+      `width=${width},height=${height},left=${left},top=${top},popup=true`,
+    );
+
+    if (!popup) {
+      onError?.();
+      return;
+    }
+
+    // Poll for the redirect back with the id_token in the hash
+    const interval = setInterval(() => {
+      try {
+        if (popup.closed) {
+          clearInterval(interval);
+          return;
+        }
+        const popupUrl = popup.location.href;
+        if (popupUrl.startsWith(redirectUri)) {
+          clearInterval(interval);
+          const hash = popup.location.hash.substring(1);
+          const hashParams = new URLSearchParams(hash);
+          const idToken = hashParams.get('id_token');
+          popup.close();
+          if (idToken) {
+            onSuccess(idToken);
+          } else {
+            onError?.();
+          }
+        }
+      } catch {
+        // Cross-origin — popup hasn't redirected back yet, keep polling
+      }
+    }, 200);
+
+    // Safety timeout — stop polling after 2 minutes
+    setTimeout(() => clearInterval(interval), 120_000);
   };
 
   return (
     <>
-      {/* Hidden real Google button */}
+      {/* Hidden real Google button (used when GIS loads) */}
       <div
         ref={hiddenRef}
         style={{
@@ -122,11 +221,10 @@ export function GoogleSignInButton({ onSuccess, onError, label = 'Continue with 
         }}
       />
 
-      {/* Our custom styled button — dark blue glass to match auth theme */}
+      {/* Our custom styled button — always clickable */}
       <button
         type="button"
         onClick={handleClick}
-        disabled={!ready}
         style={{
           width: '100%',
           display: 'flex',
@@ -142,7 +240,7 @@ export function GoogleSignInButton({ onSuccess, onError, label = 'Continue with 
           color: '#c8d0e8',
           fontSize: 15,
           fontWeight: 500,
-          cursor: ready ? 'pointer' : 'wait',
+          cursor: 'pointer',
           transition: 'all 0.25s ease',
           letterSpacing: '0.02em',
           boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04)',
