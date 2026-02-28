@@ -151,8 +151,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
   const handleDeleteAccount = async () => {
     setDeleteError('');
 
-    // For users without a password (e.g. Google sign-in), require typing DELETE
-    if (user?.hasPassword === false) {
+    // For Google sign-in users, require typing DELETE instead of password
+    if (user?.isGoogleUser) {
       if (deleteConfirmText !== 'DELETE') {
         setDeleteError('Type DELETE to confirm account deletion');
         return;
@@ -393,7 +393,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
             </div>
 
             {/* Email — hidden for Google sign-in users, editable for password users */}
-            {user?.hasPassword !== false && (
+            {!user?.isGoogleUser && (
               <div style={{ marginBottom: 20 }}>
                 <label style={s.label}>Email</label>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -526,7 +526,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
 
             {/* Change Password (only for users with a password -- not Google OAuth) */}
             <div style={s.divider}>
-              {user?.hasPassword === false ? (
+              {user?.isGoogleUser ? (
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
                   Signed in with Google -- password management is not available.
                 </p>
@@ -700,7 +700,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     This action cannot be undone.
                   </p>
 
-                  {user?.hasPassword === false ? (
+                  {user?.isGoogleUser ? (
                     <div style={{ marginBottom: 8 }}>
                       <input
                         type="text"

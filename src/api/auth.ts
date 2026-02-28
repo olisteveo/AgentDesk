@@ -33,6 +33,7 @@ export interface AuthUser {
   onboardingDone?: boolean;
   avatarId?: string;
   hasPassword?: boolean;
+  isGoogleUser?: boolean;
 }
 
 export interface AuthTeam {

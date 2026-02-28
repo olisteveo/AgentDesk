@@ -41,6 +41,7 @@ export interface AuthUser {
   onboardingDone: boolean;
   avatarId: string;
   hasPassword: boolean;
+  isGoogleUser: boolean;
   stripeCancelAt: string | null;
 }
 
@@ -104,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         onboardingDone: res.user.onboardingDone ?? false,
         avatarId: res.user.avatarId ?? 'avatar1',
         hasPassword: res.user.hasPassword ?? true,
+        isGoogleUser: res.user.isGoogleUser ?? false,
         stripeCancelAt: res.team.stripeCancelAt ?? null,
       };
       localStorage.setItem('user', JSON.stringify(fresh));
@@ -139,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboardingDone: res.user.onboardingDone ?? false,
       avatarId: res.user.avatarId ?? 'avatar1',
       hasPassword: res.user.hasPassword ?? true,
+      isGoogleUser: res.user.isGoogleUser ?? false,
       stripeCancelAt: res.team.stripeCancelAt ?? null,
     };
 
@@ -212,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboardingDone: res.user.onboardingDone ?? false,
       avatarId: res.user.avatarId ?? 'avatar1',
       hasPassword: res.user.hasPassword ?? true,
+      isGoogleUser: res.user.isGoogleUser ?? false,
       stripeCancelAt: res.team.stripeCancelAt ?? null,
     };
     localStorage.setItem('user', JSON.stringify(userData));
