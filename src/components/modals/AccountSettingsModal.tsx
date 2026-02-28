@@ -43,6 +43,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
   // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
@@ -149,6 +150,15 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
 
   const handleDeleteAccount = async () => {
     setDeleteError('');
+
+    // For users without a password (e.g. Google sign-in), require typing DELETE
+    if (user?.hasPassword === false) {
+      if (deleteConfirmText !== 'DELETE') {
+        setDeleteError('Type DELETE to confirm account deletion');
+        return;
+      }
+    }
+
     setDeleting(true);
 
     try {
@@ -690,7 +700,18 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     This action cannot be undone.
                   </p>
 
-                  {user?.hasPassword !== false && (
+                  {user?.hasPassword === false ? (
+                    <div style={{ marginBottom: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Type DELETE to confirm"
+                        value={deleteConfirmText}
+                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                        style={{ ...s.input, fontSize: 13, padding: '10px' }}
+                        autoComplete="off"
+                      />
+                    </div>
+                  ) : (
                     <div style={{ position: 'relative', marginBottom: 8 }}>
                       <input
                         type={showDeletePw ? 'text' : 'password'}
@@ -719,7 +740,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
 
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
-                      onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); setDeleteError(''); }}
+                      onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); setDeleteConfirmText(''); setDeleteError(''); }}
                       style={{
                         flex: 1, padding: 10, background: 'var(--bg-surface)',
                         border: '1px solid var(--border-subtle)', borderRadius: 6, color: 'var(--text-secondary)',
