@@ -11,6 +11,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Send, Trash2, Download, Sparkles, Check } from 'lucide-react';
 import { sendChat, getChatHistory, saveChatMessages, clearChatHistory } from '../api/chat';
 import type { PersistedMessage } from '../api/chat';
+import { signalChatSessionEnd } from '../api/memory';
 import { createDesk, updateDesk } from '../api/desks';
 import { parseCodeBlocks } from '../utils/parseCodeBlocks';
 import { downloadCodeBlock } from '../utils/download';
@@ -64,6 +65,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const [isThinking, setIsThinking] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const sessionMsgCount = useRef(0); // track messages sent this session
 
   // Personality editor
   const [showPersonality, setShowPersonality] = useState(false);
@@ -187,6 +189,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
 
       // Persist to backend (fire-and-forget)
       saveChatMessages(deskId, text, response.content, response.model, response.costUsd).catch(() => {});
+      sessionMsgCount.current += 2; // user + assistant
 
     } catch (err) {
       const errMsg = err instanceof Error ? err.message
@@ -323,10 +326,21 @@ const AgentChat: React.FC<AgentChatProps> = ({
     }
   };
 
+  // ── Close handler (signals session end for memory generation) ──
+
+  const handleClose = useCallback(async () => {
+    if (sessionMsgCount.current >= 4) {
+      resolveBackendDeskId().then(deskId => {
+        if (deskId) signalChatSessionEnd(deskId).catch(() => {});
+      }).catch(() => {});
+    }
+    onClose();
+  }, [onClose, resolveBackendDeskId]);
+
   // ── Main render ─────────────────────────────────────────────
 
   return (
-    <div className="ac-overlay" onClick={onClose}>
+    <div className="ac-overlay" onClick={handleClose}>
       <div className="ac-panel" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="ac-header">
@@ -349,7 +363,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                 <Trash2 size={14} />
               </button>
             )}
-            <button className="ac-icon-btn close" onClick={onClose} title="Close">
+            <button className="ac-icon-btn close" onClick={handleClose} title="Close">
               <X size={16} />
             </button>
           </div>

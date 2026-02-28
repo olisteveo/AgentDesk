@@ -18,14 +18,15 @@ interface AccountSettingsModalProps {
 type Tab = 'account' | 'billing' | 'routing';
 
 // Inline styles (keeps the modal self-contained)
+// Uses CSS variables for theme-aware colors
 const s = {
-  label: { display: 'block', color: '#888', fontSize: '13px', marginBottom: '8px' } as React.CSSProperties,
+  label: { display: 'block', color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '8px' } as React.CSSProperties,
   input: {
     width: '100%', padding: '12px',
-    background: 'rgba(0,0,0,0.5)', border: '1px solid #444',
-    borderRadius: '6px', color: '#fff', fontFamily: 'inherit',
+    background: 'var(--input-bg)', border: '1px solid var(--border-medium)',
+    borderRadius: '6px', color: 'var(--text-primary)', fontFamily: 'inherit',
   } as React.CSSProperties,
-  divider: { borderTop: '1px solid #333', paddingTop: '20px', marginTop: '20px' } as React.CSSProperties,
+  divider: { borderTop: '1px solid var(--border-subtle)', paddingTop: '20px', marginTop: '20px' } as React.CSSProperties,
 };
 
 export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onClose, initialTab }) => {
@@ -324,7 +325,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, marginBottom: 24, borderBottom: '1px solid #333' }}>
+        <div style={{ display: 'flex', gap: 0, marginBottom: 24, borderBottom: '1px solid var(--border-subtle)' }}>
           {tabs.map((t) => (
             <button
               key={t}
@@ -335,7 +336,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                 background: 'transparent',
                 border: 'none',
                 borderBottom: tab === t ? '2px solid #667eea' : '2px solid transparent',
-                color: tab === t ? '#fff' : '#666',
+                color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
                 fontSize: 14,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -397,8 +398,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                       onClick={() => setShowChangeEmail(true)}
                       style={{
                         padding: '12px 16px', background: 'transparent',
-                        border: '1px solid #444', borderRadius: 6,
-                        color: '#ccc', cursor: 'pointer', fontFamily: 'inherit',
+                        border: '1px solid var(--border-medium)', borderRadius: 6,
+                        color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit',
                         fontSize: 13, whiteSpace: 'nowrap',
                       }}
                     >
@@ -413,7 +414,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     border: '1px solid rgba(102,126,234,0.15)',
                     borderRadius: 8, padding: 16, marginTop: 10,
                   }}>
-                    <p style={{ color: '#aaa', fontSize: 13, marginBottom: 12 }}>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
                       A verification email will be sent to the new address. The change takes effect once you click the link.
                     </p>
                     <input
@@ -439,7 +440,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                         onClick={() => setShowEmailPw(!showEmailPw)}
                         style={{
                           position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                          background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4,
                         }}
                         tabIndex={-1}
                       >
@@ -475,8 +476,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                           setEmailDevLink('');
                         }}
                         style={{
-                          flex: 1, padding: 10, background: 'rgba(255,255,255,0.05)',
-                          border: '1px solid #333', borderRadius: 6, color: '#aaa',
+                          flex: 1, padding: 10, background: 'var(--bg-surface)',
+                          border: '1px solid var(--border-subtle)', borderRadius: 6, color: 'var(--text-secondary)',
                           cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
                         }}
                       >
@@ -506,17 +507,17 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
               <div style={{
                 ...s.input,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                color: '#ccc', cursor: 'default',
+                color: 'var(--text-secondary)', cursor: 'default',
               }}>
                 <span>{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
-                <span style={{ color: '#555', fontSize: 11 }}>Auto-detected</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Auto-detected</span>
               </div>
             </div>
 
             {/* Change Password (only for users with a password -- not Google OAuth) */}
             <div style={s.divider}>
               {user?.hasPassword === false ? (
-                <p style={{ color: '#666', fontSize: 13, margin: 0 }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
                   Signed in with Google -- password management is not available.
                 </p>
               ) : !showChangePassword ? (
@@ -524,8 +525,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                   onClick={() => setShowChangePassword(true)}
                   style={{
                     width: '100%', padding: 12, background: 'transparent',
-                    border: '1px solid #444', borderRadius: 6,
-                    color: '#ccc', cursor: 'pointer', fontFamily: 'inherit',
+                    border: '1px solid var(--border-medium)', borderRadius: 6,
+                    color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit',
                     fontSize: 13,
                   }}
                 >
@@ -537,7 +538,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                   border: '1px solid rgba(102,126,234,0.15)',
                   borderRadius: 8, padding: 16,
                 }}>
-                  <p style={{ color: '#aaa', fontSize: 13, marginBottom: 12 }}>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
                     Enter your current password and choose a new one.
                   </p>
 
@@ -558,7 +559,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                       onClick={() => setShowCurrentPw(!showCurrentPw)}
                       style={{
                         position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                        background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4,
                       }}
                       tabIndex={-1}
                     >
@@ -581,7 +582,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                       onClick={() => setShowNewPw(!showNewPw)}
                       style={{
                         position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                        background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4,
                       }}
                       tabIndex={-1}
                     >
@@ -604,7 +605,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                       onClick={() => setShowConfirmPw(!showConfirmPw)}
                       style={{
                         position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                        background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4,
                       }}
                       tabIndex={-1}
                     >
@@ -630,8 +631,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                         setPasswordSuccess('');
                       }}
                       style={{
-                        flex: 1, padding: 10, background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid #333', borderRadius: 6, color: '#aaa',
+                        flex: 1, padding: 10, background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)', borderRadius: 6, color: 'var(--text-secondary)',
                         cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
                       }}
                     >
@@ -670,7 +671,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
             </div>
 
             {/* Delete Account */}
-            <div style={{ borderTop: '1px solid #2a1515', paddingTop: 16, marginTop: 16 }}>
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, marginTop: 16 }}>
               {!showDeleteConfirm ? (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
@@ -703,7 +704,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                         onClick={() => setShowDeletePw(!showDeletePw)}
                         style={{
                           position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                          background: 'none', border: 'none', color: '#666', cursor: 'pointer', padding: 4,
+                          background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4,
                         }}
                         tabIndex={-1}
                       >
@@ -720,8 +721,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     <button
                       onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); setDeleteError(''); }}
                       style={{
-                        flex: 1, padding: 10, background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid #333', borderRadius: 6, color: '#aaa',
+                        flex: 1, padding: 10, background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)', borderRadius: 6, color: 'var(--text-secondary)',
                         cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
                       }}
                     >
@@ -766,12 +767,12 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
             <div style={{
               background: isPro
                 ? 'linear-gradient(135deg, rgba(102,126,234,0.1), rgba(118,75,162,0.06))'
-                : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${isPro ? 'rgba(102,126,234,0.3)' : '#333'}`,
+                : 'var(--bg-surface)',
+              border: `1px solid ${isPro ? 'rgba(102,126,234,0.3)' : 'var(--border-subtle)'}`,
               borderRadius: 12, padding: 20, marginBottom: 20,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ color: '#fff', fontSize: 16, fontWeight: 600 }}>
+                <span style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 600 }}>
                   {isPro ? 'Pro' : 'Starter'} Plan
                 </span>
                 {isPro && (
@@ -785,7 +786,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                   </span>
                 )}
               </div>
-              <p style={{ color: '#888', fontSize: 13, margin: 0 }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
                 {isPro
                   ? '5 users, 6 desks, 6 providers, full analytics, meeting room, whiteboard, priority support'
                   : '1 user, 3 desks, 3 providers, basic task management, cost overview'}
@@ -796,17 +797,17 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
               {/* Free card */}
               <div style={{
-                background: !isPro ? 'rgba(102,126,234,0.08)' : 'rgba(255,255,255,0.02)',
-                border: `1px solid ${!isPro ? 'rgba(102,126,234,0.3)' : '#222'}`,
+                background: !isPro ? 'rgba(102,126,234,0.08)' : 'var(--bg-surface)',
+                border: `1px solid ${!isPro ? 'rgba(102,126,234,0.3)' : 'var(--border-subtle)'}`,
                 borderRadius: 10, padding: 16,
               }}>
-                <h4 style={{ color: '#fff', fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>Starter</h4>
-                <p style={{ color: '#fff', fontSize: 22, fontWeight: 700, margin: '0 0 10px' }}>
-                  $0<span style={{ color: '#666', fontSize: 12, fontWeight: 400 }}> forever</span>
+                <h4 style={{ color: 'var(--text-primary)', fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>Starter</h4>
+                <p style={{ color: 'var(--text-primary)', fontSize: 22, fontWeight: 700, margin: '0 0 10px' }}>
+                  $0<span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 400 }}> forever</span>
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 14px' }}>
                   {['1 user', '3 desks', '3 providers', 'Basic tasks', 'Cost overview', 'BYOK'].map((f) => (
-                    <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#aaa', fontSize: 12, padding: '2px 0' }}>
+                    <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', fontSize: 12, padding: '2px 0' }}>
                       <Check size={12} strokeWidth={2.5} style={{ color: '#667eea' }} /> {f}
                     </li>
                   ))}
@@ -824,8 +825,8 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     disabled={changingPlan}
                     style={{
                       width: '100%', padding: 8, fontSize: 12, fontWeight: 600,
-                      background: 'rgba(255,255,255,0.05)', border: '1px solid #333',
-                      borderRadius: 6, color: '#aaa', cursor: 'pointer', fontFamily: 'inherit',
+                      background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+                      borderRadius: 6, color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >
                     {changingPlan ? '...' : 'Downgrade'}
@@ -842,17 +843,17 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
 
               {/* Pro card */}
               <div style={{
-                background: isPro ? 'rgba(102,126,234,0.08)' : 'rgba(255,255,255,0.02)',
-                border: `1px solid ${isPro ? 'rgba(102,126,234,0.3)' : '#222'}`,
+                background: isPro ? 'rgba(102,126,234,0.08)' : 'var(--bg-surface)',
+                border: `1px solid ${isPro ? 'rgba(102,126,234,0.3)' : 'var(--border-subtle)'}`,
                 borderRadius: 10, padding: 16,
               }}>
-                <h4 style={{ color: '#fff', fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>Pro</h4>
-                <p style={{ color: '#fff', fontSize: 22, fontWeight: 700, margin: '0 0 10px' }}>
-                  $19<span style={{ color: '#666', fontSize: 12, fontWeight: 400 }}> /month</span>
+                <h4 style={{ color: 'var(--text-primary)', fontSize: 14, margin: '0 0 4px', fontWeight: 600 }}>Pro</h4>
+                <p style={{ color: 'var(--text-primary)', fontSize: 22, fontWeight: 700, margin: '0 0 10px' }}>
+                  $19<span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 400 }}> /month</span>
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 14px' }}>
                   {['Up to 5 users', '6 desks', '6 providers', 'Advanced tasks', 'Full analytics', 'Meeting room', 'Whiteboard', 'Priority support'].map((f) => (
-                    <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#aaa', fontSize: 12, padding: '2px 0' }}>
+                    <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', fontSize: 12, padding: '2px 0' }}>
                       <Check size={12} strokeWidth={2.5} style={{ color: '#667eea' }} /> {f}
                     </li>
                   ))}
@@ -906,7 +907,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     year: 'numeric', month: 'long', day: 'numeric',
                   })}
                 </p>
-                <p style={{ color: '#888', fontSize: 12, margin: '6px 0 0' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: 12, margin: '6px 0 0' }}>
                   You'll keep Pro access until then. Re-subscribe anytime from the billing portal.
                 </p>
               </div>
@@ -914,10 +915,10 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
 
             {isPro && (
               <div style={{
-                background: 'rgba(255,255,255,0.02)', border: '1px solid #222',
+                background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
                 borderRadius: 10, padding: 16, textAlign: 'center',
               }}>
-                <p style={{ color: '#888', fontSize: 13, margin: '0 0 12px' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '0 0 12px' }}>
                   Update payment method, view invoices, or cancel your subscription.
                 </p>
                 <button
@@ -944,7 +945,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
               <Sparkles size={18} style={{ color: '#ffa502' }} />
               <h3 style={{ margin: 0, fontSize: 16 }}>Smart Routing Configuration</h3>
             </div>
-            <p style={{ color: '#888', fontSize: 12, marginBottom: 20 }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 20 }}>
               Configure how the AI routing analysis handles proposed optimizations.
               Auto-approved rules are subject to safety guardrails.
             </p>
@@ -953,10 +954,10 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
             <div style={{ ...s.divider, borderTop: 'none', paddingTop: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div>
-                  <label style={{ ...s.label, marginBottom: 2, fontWeight: 600, color: '#ccc' }}>
+                  <label style={{ ...s.label, marginBottom: 2, fontWeight: 600, color: 'var(--text-secondary)' }}>
                     Enable Auto-Approval
                   </label>
-                  <span style={{ fontSize: 11, color: '#666' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     Automatically activate safe routing rules from analysis
                   </span>
                 </div>
@@ -964,7 +965,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                   onClick={() => setRoutingConfig(c => ({ ...c, auto_approve: !c.auto_approve }))}
                   style={{
                     width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                    background: routingConfig.auto_approve ? '#1dd1a1' : '#444',
+                    background: routingConfig.auto_approve ? '#1dd1a1' : 'var(--border-medium)',
                     transition: 'background 0.2s', position: 'relative',
                   }}
                 >
@@ -980,7 +981,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
             {/* Confidence threshold */}
             <div style={s.divider}>
               <label style={s.label}>
-                Minimum Confidence Threshold: <strong style={{ color: '#fff' }}>
+                Minimum Confidence Threshold: <strong style={{ color: 'var(--text-primary)' }}>
                   {Math.round((routingConfig.auto_approve_confidence_threshold ?? 0.8) * 100)}%
                 </strong>
               </label>
@@ -996,7 +997,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                 }))}
                 style={{ width: '100%', accentColor: '#667eea' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#666', marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                 <span>70% (more rules)</span>
                 <span>95% (safer)</span>
               </div>
@@ -1012,9 +1013,9 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                     onClick={() => setRoutingConfig(c => ({ ...c, optimization_goal: goal }))}
                     style={{
                       padding: '10px 12px', borderRadius: 8, border: '1px solid',
-                      borderColor: routingConfig.optimization_goal === goal ? '#667eea' : '#444',
-                      background: routingConfig.optimization_goal === goal ? 'rgba(102,126,234,0.12)' : 'rgba(0,0,0,0.3)',
-                      color: routingConfig.optimization_goal === goal ? '#667eea' : '#888',
+                      borderColor: routingConfig.optimization_goal === goal ? '#667eea' : 'var(--border-medium)',
+                      background: routingConfig.optimization_goal === goal ? 'rgba(102,126,234,0.12)' : 'var(--bg-surface)',
+                      color: routingConfig.optimization_goal === goal ? '#667eea' : 'var(--text-muted)',
                       cursor: 'pointer', fontSize: 13, fontWeight: 600,
                       textTransform: 'capitalize', fontFamily: 'inherit',
                       transition: 'all 0.15s',
@@ -1030,10 +1031,10 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
             <div style={s.divider}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div>
-                  <label style={{ ...s.label, marginBottom: 2, fontWeight: 600, color: '#ccc' }}>
+                  <label style={{ ...s.label, marginBottom: 2, fontWeight: 600, color: 'var(--text-secondary)' }}>
                     Auto-Approve Cost Rules
                   </label>
-                  <span style={{ fontSize: 11, color: '#666' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     Allow auto-approval of model downgrade suggestions
                   </span>
                 </div>
@@ -1041,7 +1042,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                   onClick={() => setRoutingConfig(c => ({ ...c, auto_approve_cost_rules: !c.auto_approve_cost_rules }))}
                   style={{
                     width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                    background: routingConfig.auto_approve_cost_rules ? '#1dd1a1' : '#444',
+                    background: routingConfig.auto_approve_cost_rules ? '#1dd1a1' : 'var(--border-medium)',
                     transition: 'background 0.2s', position: 'relative',
                   }}
                 >
@@ -1057,7 +1058,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
             {/* Max cost savings percentage */}
             <div style={s.divider}>
               <label style={s.label}>
-                Max Cost Savings per Switch: <strong style={{ color: '#fff' }}>
+                Max Cost Savings per Switch: <strong style={{ color: 'var(--text-primary)' }}>
                   {routingConfig.max_auto_cost_savings_pct ?? 30}%
                 </strong>
               </label>
@@ -1073,7 +1074,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOp
                 }))}
                 style={{ width: '100%', accentColor: '#667eea' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#666', marginTop: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                 <span>10% (conservative)</span>
                 <span>50% (aggressive)</span>
               </div>

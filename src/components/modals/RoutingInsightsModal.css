@@ -588,3 +588,136 @@
     padding: 16px 20px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .ri-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .ri-panel {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-color: #d0d5e8;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .ri-header {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .ri-header h2 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .ri-close-btn {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+  color: #888;
+}
+
+[data-theme="light"] .ri-close-btn:hover {
+  background: #eceef8;
+  color: #333;
+}
+
+[data-theme="light"] .ri-tabs {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .ri-tab {
+  color: #888;
+}
+
+[data-theme="light"] .ri-tab:hover {
+  color: #555;
+}
+
+[data-theme="light"] .ri-tab.active {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .ri-loading,
+[data-theme="light"] .ri-empty {
+  color: #999;
+}
+
+[data-theme="light"] .ri-summary-card {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .ri-summary-text {
+  color: #555;
+}
+
+[data-theme="light"] .ri-stat-card {
+  background: #fff;
+  border-color: #e2e5f1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .ri-stat-value {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .ri-stat-label {
+  color: #888;
+}
+
+[data-theme="light"] .ri-findings-preview h4,
+[data-theme="light"] .ri-rules-preview h4,
+[data-theme="light"] .ri-history h4,
+[data-theme="light"] .ri-rules-section h4 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .ri-finding-preview-item {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .ri-finding-title {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .ri-history-item {
+  background: #fff;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .ri-history-item:hover {
+  background: #f8f9ff;
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .ri-history-date {
+  color: #999;
+}
+
+[data-theme="light"] .ri-finding-card {
+  background: #fff;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .ri-finding-desc {
+  color: #555;
+}
+
+[data-theme="light"] .ri-rule-card {
+  background: #fff;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .ri-rule-condition,
+[data-theme="light"] .ri-rule-action {
+  color: #555;
+}
+
+[data-theme="light"] .ri-rule-reasoning {
+  color: #888;
+}
+
+[data-theme="light"] .ri-rule-impact {
+  color: #666;
+}

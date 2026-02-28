@@ -2382,10 +2382,11 @@
   to { transform: rotate(360deg); }
 }
 
-/* ── View Mode Toggle ──────────────────────────────────────── */
+/* ── View Mode Toggle + Theme ─────────────────────────────── */
 
 .view-mode-toggle {
   display: flex;
+  align-items: center;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
@@ -2493,4 +2494,219 @@
   padding: 1px 6px;
   border-radius: 8px;
   margin-left: auto;
+}
+
+/* ── Theme Toggle ─────────────────────────────────────────── */
+
+.theme-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 6px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+  color: #feca57;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE — overlays and modals only
+   (toolbar & canvas stay dark always)
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .task-form-overlay,
+[data-theme="light"] .feed-panel-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .task-form {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-color: #d0d5e8;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .task-form h2 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .form-group label {
+  color: #555;
+}
+
+[data-theme="light"] .form-group select,
+[data-theme="light"] .form-group input,
+[data-theme="light"] .form-group textarea {
+  background: #fff;
+  border-color: #d0d5e8;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .form-group select option {
+  background: #fff;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .form-buttons button.secondary {
+  background: linear-gradient(135deg, #e2e5f1 0%, #d0d5e8 100%);
+  color: #555;
+}
+
+[data-theme="light"] .cost-estimate {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .cost-model {
+  color: #888;
+}
+
+[data-theme="light"] .close-btn {
+  color: #999;
+}
+
+[data-theme="light"] .close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
+}
+
+[data-theme="light"] .feed-panel-expanded {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-color: #d0d5e8;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .feed-panel-header {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .feed-panel-header h2 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .task-result-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .task-result-modal {
+  background: #ffffff;
+  border-color: #d0d5e8;
+  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .task-result-header {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .task-result-header h2 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .task-result-info {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .result-task-title {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .result-model {
+  color: #666;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .result-description {
+  color: #888;
+}
+
+[data-theme="light"] .task-result-content pre {
+  color: #333;
+}
+
+[data-theme="light"] .code-block {
+  background: #f5f6fa;
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .code-block-header {
+  background: #eceef8;
+  border-bottom-color: #d0d5e8;
+}
+
+[data-theme="light"] .code-block-lang {
+  color: #667eea;
+}
+
+[data-theme="light"] .code-block code {
+  color: #333;
+}
+
+[data-theme="light"] .task-failed-hint {
+  color: #888;
+}
+
+[data-theme="light"] .routing-suggestion {
+  background: linear-gradient(135deg, rgba(29, 209, 161, 0.06) 0%, rgba(102, 126, 234, 0.06) 100%);
+  border-color: rgba(29, 209, 161, 0.2);
+}
+
+[data-theme="light"] .routing-suggestion.loading {
+  color: #888;
+  border-color: #d0d5e8;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .routing-desk-name {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .routing-agent-name {
+  color: #666;
+}
+
+[data-theme="light"] .routing-reasoning {
+  color: #666;
+}
+
+[data-theme="light"] .routing-cost {
+  color: #888;
+}
+
+[data-theme="light"] .routing-cost-alt {
+  color: #999;
+}
+
+[data-theme="light"] .routing-alt {
+  color: #888;
+  border-top-color: #e2e5f1;
+}
+
+[data-theme="light"] .routing-dismiss {
+  border-color: #d0d5e8;
+  color: #888;
+}
+
+[data-theme="light"] .routing-dismiss:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #555;
+}
+
+[data-theme="light"] .advanced-dropdown {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-color: #d0d5e8;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .advanced-dropdown button {
+  color: #555;
+}
+
+[data-theme="light"] .advanced-dropdown button:hover {
+  background: rgba(102, 126, 234, 0.08);
+  color: #1a1a2e;
 }

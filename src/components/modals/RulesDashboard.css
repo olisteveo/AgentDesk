@@ -717,3 +717,167 @@
   border-radius: 6px;
   font-weight: 600;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .rd-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .rd-panel {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-color: #d0d5e8;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .rd-header {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .rd-header h2 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .rd-close-btn {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+  color: #888;
+}
+
+[data-theme="light"] .rd-close-btn:hover {
+  background: #eceef8;
+  color: #333;
+}
+
+[data-theme="light"] .rd-tabs {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .rd-tab {
+  color: #888;
+}
+
+[data-theme="light"] .rd-tab:hover {
+  color: #555;
+}
+
+[data-theme="light"] .rd-tab.active {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .rd-body::-webkit-scrollbar-thumb {
+  background: #ccc;
+}
+
+[data-theme="light"] .rd-empty h3 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .rd-empty p {
+  color: #888;
+}
+
+[data-theme="light"] .rd-rule-card {
+  background: #fff;
+  border-color: #e2e5f1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .rd-rule-card:hover {
+  border-color: #d0d5e8;
+  background: #f8f9ff;
+}
+
+[data-theme="light"] .rd-rule-title {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .rd-rule-content {
+  color: #666;
+}
+
+[data-theme="light"] .rd-rule-meta {
+  color: #999;
+}
+
+[data-theme="light"] .rd-icon-btn {
+  color: #999;
+}
+
+[data-theme="light"] .rd-icon-btn:hover {
+  color: #1a1a2e;
+  background: #eceef8;
+}
+
+[data-theme="light"] .rd-secondary-btn {
+  background: #f5f6fa;
+  color: #888;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .rd-secondary-btn:hover {
+  color: #1a1a2e;
+  background: #eceef8;
+}
+
+[data-theme="light"] .rd-suggestion-card {
+  background: #fff;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .rd-suggestion-source {
+  color: #888;
+}
+
+[data-theme="light"] .rd-toggle-slider {
+  background: #ccc;
+}
+
+[data-theme="light"] .rd-core-rule-card {
+  background: #fff;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .rd-core-rule-card:hover {
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .rd-core-rule-title {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .rd-core-rule-content {
+  color: #666;
+}
+
+[data-theme="light"] .rd-core-lock {
+  color: #999;
+}
+
+[data-theme="light"] .rd-core-footer {
+  border-top-color: #e2e5f1;
+}
+
+[data-theme="light"] .rd-core-preset-option {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .rd-core-preset-option:hover {
+  background: #eceef8;
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .rd-core-name {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .rd-core-active-desc {
+  color: #888;
+}
+
+[data-theme="light"] .rd-core-picker-title {
+  color: #1a1a2e;
+}

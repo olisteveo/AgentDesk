@@ -23,7 +23,7 @@ import {
 } from '../utils/sprites';
 import MeetingRoom from './MeetingRoom';
 import CostDashboard from './CostDashboard';
-import { ClipboardList, DollarSign, X, Trash2, Rss, Download, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles, ChevronDown, LayoutDashboard } from 'lucide-react';
+import { ClipboardList, DollarSign, X, Trash2, Rss, Download, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles, ChevronDown, LayoutDashboard, Sun, Moon } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { downloadCodeBlock, downloadAsMarkdown } from '../utils/download';
 import { friendlyError } from '../utils/friendlyErrors';
@@ -227,6 +227,18 @@ const OfficeCanvas: React.FC = () => {
   const [viewMode, setViewMode] = useState<'office' | 'dashboard'>(() => {
     try { return (localStorage.getItem('agentdesk-view-mode') as 'office' | 'dashboard') || 'office'; } catch { return 'office'; }
   });
+
+  // Global theme — persisted, applied to document root so all components inherit
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return (localStorage.getItem('agentdesk-theme') as 'dark' | 'light') || 'dark'; } catch { return 'dark'; }
+  });
+
+  useEffect(() => {
+    // Office view stays dark always; theme only applies on Dashboard
+    const effective = viewMode === 'office' ? 'dark' : theme;
+    document.documentElement.setAttribute('data-theme', effective);
+    localStorage.setItem('agentdesk-theme', theme);
+  }, [theme, viewMode]);
 
   // Agent chat state (1-on-1 chat panel)
   const [chatAgent, setChatAgent] = useState<Agent | null>(null);
@@ -1433,7 +1445,7 @@ const OfficeCanvas: React.FC = () => {
 
   return (
     <div className="office-canvas-container">
-      <div className="office-frame-wrapper" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
+      <div className="office-frame-wrapper" data-theme="dark" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
         <div className="office-frame-watermark" />
         <div className="office-frame">
           <canvas ref={canvasRef} className="office-canvas"
@@ -1654,7 +1666,7 @@ const OfficeCanvas: React.FC = () => {
           Hire Agent
         </button>
 
-        {/* View mode toggle */}
+        {/* View mode + theme toggle */}
         <div className="view-mode-toggle">
           <button
             className={`view-toggle-btn${viewMode === 'office' ? ' active' : ''}`}
@@ -1669,6 +1681,16 @@ const OfficeCanvas: React.FC = () => {
             <LayoutDashboard size={12} style={{ marginRight: 4 }} />
             Dashboard
           </button>
+          {viewMode === 'dashboard' && (
+            <button
+              className="theme-toggle-btn"
+              disabled={!onboardingDone}
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+          )}
         </div>
 
         {/* Advanced dropdown — Rules, Routing, Whiteboard */}
@@ -1723,7 +1745,7 @@ const OfficeCanvas: React.FC = () => {
         </div>
       )}
 
-      <div className="left-sidebar" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
+      <div className="left-sidebar" data-theme="dark" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
         {/* Live Task Feed */}
         <div className="ui-panel task-feed-panel">
           <div className="task-feed-header" onClick={() => setShowFeedPanel(true)} style={{ cursor: 'pointer' }}>
@@ -1854,7 +1876,7 @@ const OfficeCanvas: React.FC = () => {
 
       </div>
 
-      <div className="right-sidebar" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
+      <div className="right-sidebar" data-theme="dark" style={{ display: viewMode === 'office' ? undefined : 'none' }}>
         <div className="agents-panel">
           <h3>Team</h3>
           <div className="agents-grid">
@@ -1890,6 +1912,8 @@ const OfficeCanvas: React.FC = () => {
           todayApiCost={todayApiCost}
           taskLog={taskLog}
           taskResults={taskResults}
+          theme={theme}
+          onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
           onAgentClick={(agent) => setChatAgent(agent)}
           onCreateTask={() => setShowTaskForm(true)}
           onOpenCostPanel={() => setShowCostPanel(true)}

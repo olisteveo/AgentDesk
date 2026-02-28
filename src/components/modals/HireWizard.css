@@ -922,3 +922,232 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .hire-wizard-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .hire-wizard {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-color: #d0d5e8;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .progress-step {
+  background: #e2e5f1;
+}
+
+[data-theme="light"] .hire-wizard-step-label {
+  color: #888;
+}
+
+[data-theme="light"] .wizard-card {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .wizard-card:hover {
+  border-color: #d0d5e8;
+  background: #eceef8;
+}
+
+[data-theme="light"] .wizard-card strong {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .wizard-card-sub {
+  color: #888;
+}
+
+[data-theme="light"] .wizard-card-price,
+[data-theme="light"] .wizard-card-provider {
+  color: #888;
+}
+
+[data-theme="light"] .wizard-label {
+  color: #555;
+}
+
+[data-theme="light"] .wizard-hint {
+  color: #999;
+}
+
+[data-theme="light"] .wizard-divider {
+  color: #aaa;
+}
+
+[data-theme="light"] .wizard-input,
+[data-theme="light"] .wizard-textarea {
+  background: #fff;
+  border-color: #d0d5e8;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .wizard-summary {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .wizard-summary-title {
+  color: #888;
+}
+
+[data-theme="light"] .wizard-summary-label {
+  color: #888;
+}
+
+[data-theme="light"] .wizard-summary-value {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .hire-wizard-nav {
+  border-top-color: #e2e5f1;
+}
+
+[data-theme="light"] .wizard-btn.primary.disabled {
+  background: #e2e5f1;
+  color: #999;
+}
+
+[data-theme="light"] .wizard-btn.secondary {
+  border-color: #e2e5f1;
+  color: #888;
+}
+
+[data-theme="light"] .wizard-btn.secondary:hover {
+  border-color: #d0d5e8;
+  color: #555;
+}
+
+[data-theme="light"] .wizard-mode-tab {
+  border-bottom-color: #e2e5f1;
+  color: #888;
+}
+
+[data-theme="light"] .wizard-mode-tab:hover {
+  color: #555;
+}
+
+[data-theme="light"] .wizard-mode-tab.active {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .manage-section-title {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .manage-empty {
+  color: #888;
+}
+
+[data-theme="light"] .manage-provider-row {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .desk-option {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .desk-option:hover {
+  background: #eceef8;
+}
+
+[data-theme="light"] .desk-option-label {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .manage-add-provider select {
+  background: #fff;
+  border-color: #d0d5e8;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .disconnect-confirm-dialog {
+  background: #fff;
+  border-color: #d0d5e8;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .disconnect-confirm-dialog h3 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .desk-category-chip {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+  color: #555;
+}
+
+[data-theme="light"] .desk-category-chip:hover {
+  background: #eceef8;
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .capabilities-tag-input {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .capability-tag {
+  background: #eceef8;
+  border-color: #d0d5e8;
+  color: #555;
+}
+
+[data-theme="light"] .cap-input {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .cap-input::placeholder {
+  color: #aaa;
+}
+
+[data-theme="light"] .archetype-card {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .archetype-card:hover {
+  background: #eceef8;
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .archetype-title {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .archetype-tagline {
+  color: #888;
+}
+
+[data-theme="light"] .model-card {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .model-card:hover {
+  background: #eceef8;
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .model-card-name {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .model-card-tagline {
+  color: #888;
+}
+
+[data-theme="light"] .model-card-price {
+  color: #999;
+}
+
+[data-theme="light"] .compact-provider {
+  color: #888;
+}

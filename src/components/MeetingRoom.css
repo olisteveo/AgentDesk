@@ -1001,3 +1001,214 @@ label.participant-checkbox input[type="checkbox"] {
     border-right: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .meeting-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .meeting-setup,
+[data-theme="light"] .transcript-viewer,
+[data-theme="light"] .meeting-room {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-color: #d0d5e8;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .meeting-header,
+[data-theme="light"] .transcript-header,
+[data-theme="light"] .meeting-room-header {
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .meeting-header h2,
+[data-theme="light"] .transcript-header h2,
+[data-theme="light"] .meeting-info h2,
+[data-theme="light"] .meeting-history-panel h3,
+[data-theme="light"] .meeting-sidebar h4 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .meeting-history-toggle {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+  color: #888;
+}
+
+[data-theme="light"] .meeting-history-toggle:hover {
+  background: #eceef8;
+  color: #555;
+}
+
+[data-theme="light"] .history-loading,
+[data-theme="light"] .history-empty,
+[data-theme="light"] .transcript-empty {
+  color: #999;
+}
+
+[data-theme="light"] .history-item {
+  background: #fff;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .history-item:hover {
+  background: #f8f9ff;
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .history-topic {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .history-meta,
+[data-theme="light"] .transcript-meta {
+  color: #888;
+}
+
+[data-theme="light"] .history-view-btn {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+  color: #888;
+}
+
+[data-theme="light"] .history-view-btn:hover {
+  background: #eceef8;
+  color: #555;
+}
+
+[data-theme="light"] .history-delete-btn {
+  color: #ccc;
+}
+
+[data-theme="light"] .transcript-message {
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .transcript-message.agent {
+  background: #f5f6fa;
+}
+
+[data-theme="light"] .transcript-time {
+  color: #999;
+}
+
+[data-theme="light"] .transcript-text {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .participant-list {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] label.participant-checkbox {
+  background: #fff;
+}
+
+[data-theme="light"] label.participant-checkbox:hover {
+  background: #f0f2ff;
+}
+
+[data-theme="light"] .participant-name {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .meeting-participants-count {
+  color: #888;
+}
+
+[data-theme="light"] .chat-container {
+  border-right-color: #e2e5f1;
+}
+
+[data-theme="light"] .message-content {
+  background: #f0f2ff;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .message-text {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .chat-message.system .message-text {
+  color: #555;
+}
+
+[data-theme="light"] .message-time {
+  color: #999;
+}
+
+[data-theme="light"] .chat-input-area {
+  border-top-color: #e2e5f1;
+  background: #f5f6fa;
+}
+
+[data-theme="light"] .chat-input {
+  background: #fff;
+  border-color: #d0d5e8;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .meeting-sidebar {
+  background: #f5f6fa;
+}
+
+[data-theme="light"] .participant-item {
+  background: #fff;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .chat-messages::-webkit-scrollbar-thumb,
+[data-theme="light"] .transcript-messages::-webkit-scrollbar-thumb,
+[data-theme="light"] .history-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+}
+
+[data-theme="light"] .chat-messages .code-block {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .chat-messages .code-block-header {
+  background: #eceef8;
+  border-bottom-color: #e2e5f1;
+}
+
+[data-theme="light"] .chat-messages .code-block-lang {
+  color: #666;
+  background: #fff;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .chat-messages .code-block-copy {
+  background: #fff;
+  border-color: #d0d5e8;
+  color: #888;
+}
+
+[data-theme="light"] .chat-messages .code-block-copy:hover {
+  background: #eceef8;
+  color: #333;
+}
+
+[data-theme="light"] .chat-messages .code-block code {
+  color: #333;
+}
+
+[data-theme="light"] .round2-prompt-text {
+  color: #555;
+}
+
+[data-theme="light"] .round2-skip-btn {
+  background: #f5f6fa;
+  border-color: #e2e5f1;
+  color: #888;
+}
+
+[data-theme="light"] .round2-skip-btn:hover {
+  background: #eceef8;
+  color: #555;
+}

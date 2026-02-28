@@ -5,7 +5,7 @@
  * Supports dark/light theme toggle.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AVAILABLE_MODELS, MODEL_PRICING } from '../utils/constants';
 import type { Agent, Task, DeskAssignment } from '../types';
 import {
@@ -21,6 +21,8 @@ interface DashboardViewProps {
   todayApiCost: number;
   taskLog: string[];
   taskResults: Record<string, string>;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
   onAgentClick: (agent: Agent) => void;
   onCreateTask: () => void;
   onOpenCostPanel: () => void;
@@ -36,6 +38,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   todayApiCost,
   taskLog,
   taskResults,
+  theme,
+  onToggleTheme,
   onAgentClick,
   onCreateTask,
   onOpenCostPanel,
@@ -44,13 +48,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onRemoveTask,
 }) => {
   const [taskFilter, setTaskFilter] = useState<'all' | 'in-progress' | 'completed' | 'failed'>('all');
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('dv-theme') as 'dark' | 'light') || 'dark';
-  });
-
-  useEffect(() => {
-    localStorage.setItem('dv-theme', theme);
-  }, [theme]);
 
   const teamAgents = agents.filter(a => a.id !== 'ceo' && a.id !== 'ops');
 
@@ -91,7 +88,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   return (
-    <div className={`dv-container ${theme === 'light' ? 'dv-light' : ''}`}>
+    <div className="dv-container">
       {/* ── Left: Agent Cards ──────────────────────────────── */}
       <div className="dv-left">
         <div className="dv-section-header">
@@ -238,12 +235,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="dv-right">
         <div className="dv-section-header">
           <h3>Stats</h3>
-          <button
-            className="dv-theme-toggle"
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
-            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
         </div>
 
         <div className="dv-stats-grid">

@@ -123,3 +123,44 @@
   color: rgba(255, 255, 255, 0.7);
   background: rgba(255, 255, 255, 0.08);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE
+   ═══════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .upgrade-prompt-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .upgrade-prompt {
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9ff 100%);
+  border-color: #d0d5e8;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12), 0 0 40px rgba(102, 126, 234, 0.06);
+}
+
+[data-theme="light"] .upgrade-prompt-close {
+  color: #999;
+}
+
+[data-theme="light"] .upgrade-prompt-close:hover {
+  color: #333;
+}
+
+[data-theme="light"] .upgrade-prompt-counter {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .upgrade-prompt-message {
+  color: #666;
+}
+
+[data-theme="light"] .upgrade-prompt-btn.secondary {
+  background: #f5f6fa;
+  color: #888;
+  border-color: #e2e5f1;
+}
+
+[data-theme="light"] .upgrade-prompt-btn.secondary:hover {
+  color: #555;
+  background: #eceef8;
+}

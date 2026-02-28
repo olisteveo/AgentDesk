@@ -1,0 +1,81 @@
+/* ═══════════════════════════════════════════════════════════
+   Global Theme Variables — Agent Desk
+   Applied via data-theme attribute on <html>
+   ═══════════════════════════════════════════════════════════ */
+
+/* Dark theme (default) */
+[data-theme="dark"],
+:root {
+  --bg-primary: #0d0d1a;
+  --bg-secondary: #1a1a2e;
+  --bg-tertiary: #16213e;
+  --bg-elevated: #111125;
+  --bg-surface: rgba(255, 255, 255, 0.03);
+  --bg-surface-hover: rgba(255, 255, 255, 0.06);
+
+  --text-primary: #fff;
+  --text-secondary: #aaa;
+  --text-muted: #666;
+  --text-placeholder: #555;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.2);
+
+  --overlay-bg: rgba(5, 5, 15, 0.85);
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-bg-hover: rgba(255, 255, 255, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.05);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+  --scrollbar-track: transparent;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+  /* Accent colors — same in both themes */
+  --accent-primary: #667eea;
+  --accent-secondary: #764ba2;
+  --accent-gradient: linear-gradient(135deg, #667eea, #764ba2);
+  --success: #1dd1a1;
+  --success-bg: rgba(29, 209, 161, 0.12);
+  --error: #ff6b6b;
+  --error-bg: rgba(255, 107, 107, 0.12);
+  --warning: #feca57;
+  --warning-bg: rgba(254, 202, 87, 0.12);
+  --info: #54a0ff;
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --bg-primary: #f5f6fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f2ff;
+  --bg-elevated: #ffffff;
+  --bg-surface: rgba(0, 0, 0, 0.02);
+  --bg-surface-hover: rgba(0, 0, 0, 0.05);
+
+  --text-primary: #1a1a2e;
+  --text-secondary: #555;
+  --text-muted: #999;
+  --text-placeholder: #aaa;
+
+  --border-subtle: #e2e5f1;
+  --border-medium: #d0d5e8;
+  --border-strong: #bcc3d9;
+
+  --overlay-bg: rgba(0, 0, 0, 0.4);
+  --input-bg: #f5f6fa;
+  --input-bg-hover: #eceef8;
+  --hover-bg: rgba(0, 0, 0, 0.04);
+
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+  --scrollbar-track: transparent;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
