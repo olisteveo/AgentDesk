@@ -2,8 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles/theme.css'
-import './app.css'
-import App from './app'
+import './App.css'
+import App from './App'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
