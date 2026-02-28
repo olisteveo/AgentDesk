@@ -1722,6 +1722,12 @@
   right: 40px;
 }
 
+@media (max-width: 768px) {
+  .office-footer {
+    display: none;
+  }
+}
+
 /* ── Live Task Feed ────────────────────────────────────────── */
 
 .task-feed-panel {
