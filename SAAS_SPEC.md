@@ -863,6 +863,97 @@ POST   /api/chat-history/:deskId/end-session  # Signal session end, triggers mem
 - `src/jobs/memoryCompression.ts` — Daily compression scheduler
 - `src/api/memory.ts` (frontend) — API client
 
+### 13. Deployment Architecture
+
+**Platform choices:**
+- **Frontend:** Vercel (React + Vite) — global CDN, auto-SSL, preview deploys on PR
+- **Backend:** Railway (Express + TypeScript) — Git-push deploys, managed PostgreSQL addon, auto-SSL
+- **Database:** Railway PostgreSQL addon (includes pgvector for memory system)
+- **Domain:** Single-domain via Vercel proxy — `yourdomain.com` serves frontend + proxies `/api/*` to Railway
+
+**Architecture:**
+```
+Browser → yourdomain.com (Vercel CDN)
+              |
+              ├── Static assets (React SPA) → served from Vercel edge
+              |
+              └── /api/* requests → Vercel rewrites → Railway backend
+                                                         |
+                                                         └── Railway PostgreSQL (internal network)
+                                                              (pgvector, RLS, AES-256-GCM)
+```
+
+**Why single-domain proxy:**
+- Zero CORS complexity — all API calls are same-origin
+- No cross-origin cookie issues for auth
+- Frontend API client uses relative paths (`/api/...`) with zero code changes
+- Vercel rewrites handle the routing transparently
+
+**Deploy flow (both repos):**
+```
+git push → auto-build → auto-deploy → health check → live
+```
+- Backend: Railway runs `npm run build` (tsc) → start command runs migrations then server
+- Frontend: Vercel runs `npm run build` (tsc + vite build) → serves `dist/` globally
+
+**Railway configuration (`railway.toml`):**
+```toml
+[build]
+buildCommand = "npm run build"
+
+[deploy]
+startCommand = "node dist/scripts/migrate.js && node dist/index.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+```
+
+**Vercel configuration (`vercel.json`):**
+```json
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://RAILWAY_URL.up.railway.app/api/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+**Production environment variables (Railway):**
+```
+DATABASE_URL          → ${{Postgres.DATABASE_URL}} (auto-resolved internal URL)
+NODE_ENV              → production
+JWT_SECRET            → <random 48-byte base64>
+JWT_REFRESH_SECRET    → <random 48-byte base64>
+ENCRYPTION_KEY        → <random 32-byte base64>
+CORS_ORIGIN           → https://yourdomain.com
+PORT                  → 3001
+GOOGLE_CLIENT_ID      → <from Google Cloud Console>
+RESEND_API_KEY        → <from Resend dashboard>
+STRIPE_SECRET_KEY     → <from Stripe dashboard>
+STRIPE_WEBHOOK_SECRET → <from Stripe dashboard>
+STRIPE_PRO_PRICE_ID   → <from Stripe dashboard>
+```
+
+**Production code changes required (7 file touches):**
+
+| Repo | File | Change |
+|------|------|--------|
+| Backend | `src/config/database.ts` | Add SSL config for Railway PostgreSQL (`ssl: { rejectUnauthorized: false }` when `NODE_ENV=production`) |
+| Backend | `src/index.ts` | Add SIGTERM graceful shutdown handler (Railway sends SIGTERM on redeploy) |
+| Backend | `railway.toml` | Build/start/healthcheck configuration |
+| Frontend | `index.html` | Fix CSP `connect-src` from hardcoded `localhost:3001` to `'self'` (same-origin via proxy) |
+| Frontend | `vercel.json` | API proxy rewrites to Railway + SPA catch-all for React Router |
+| Frontend | `src/components/ErrorBoundary.tsx` | React error boundary to prevent white-screen crashes |
+| Frontend | `src/main.tsx` | Wrap `<App />` in `<ErrorBoundary>` |
+
+**SSL/HTTPS:** Automatic on both platforms — Vercel and Railway provision Let's Encrypt certificates. Browser shows secure padlock from day one.
+
+**DNS setup:**
+- `A` record: `yourdomain.com` → `76.76.21.21` (Vercel)
+- `CNAME`: `www` → `cname.vercel-dns.com` (Vercel)
+- Stripe webhook URL points directly to Railway public URL (bypasses Vercel proxy)
+
 ---
 
 ## Implementation Phases
@@ -916,6 +1007,20 @@ POST   /api/chat-history/:deskId/end-session  # Signal session end, triggers mem
 - [ ] Memory search UI (search across memories within the viewer)
 - [ ] Memory export (download memory dump as JSON)
 
+**Phase 2.9 (Production Deployment):**
+- [ ] Backend: Add SSL config to database.ts for Railway PostgreSQL
+- [ ] Backend: Add SIGTERM graceful shutdown to index.ts
+- [ ] Backend: Create railway.toml (build/start/healthcheck)
+- [ ] Frontend: Fix CSP connect-src for production (remove hardcoded localhost)
+- [ ] Frontend: Create vercel.json (API proxy + SPA rewrites)
+- [ ] Frontend: Add ErrorBoundary component + wrap App
+- [ ] Railway: Create project, add PostgreSQL addon, set env vars, deploy
+- [ ] Vercel: Create project, set env vars, deploy, connect custom domain
+- [ ] DNS: Configure A record + CNAME for custom domain
+- [ ] Google OAuth: Add production domain to authorized origins
+- [ ] Stripe: Set webhook URL to Railway public URL
+- [ ] Verify: Health check, registration, Google OAuth, SPA routing all working
+
 **Phase 3 (Scale):**
 - Advanced analytics
 - Custom agents
@@ -924,7 +1029,7 @@ POST   /api/chat-history/:deskId/end-session  # Signal session end, triggers mem
 
 ## Critical Decisions
 
-1. **Self-hosted vs Managed:** Start with managed (Render/Railway), migrate to K8s at scale
+1. **Self-hosted vs Managed:** Vercel (frontend) + Railway (backend + PostgreSQL). Single-domain proxy via Vercel rewrites. Migrate to K8s at scale
 2. **WebSocket vs SSE:** WebSocket for bidirectional, SSE fallback
 3. **Cost tracking:** Real-time via webhooks + daily reconciliation job
 4. **Data retention:** 90 days hot, 2 years cold (S3)
