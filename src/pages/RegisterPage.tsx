@@ -4,7 +4,7 @@
  * On success, auto-logs in and redirects to /office.
  */
 
-import { useState, type FormEvent, type ChangeEvent } from 'react';
+import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
@@ -82,6 +82,28 @@ export function RegisterPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [globalError, setGlobalError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Handle OAuth implicit flow redirect — Google returns id_token in URL hash
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes('id_token=')) return;
+
+    const params = new URLSearchParams(hash.substring(1));
+    const idToken = params.get('id_token');
+
+    window.history.replaceState(null, '', window.location.pathname);
+
+    if (idToken) {
+      setSubmitting(true);
+      googleLogin(idToken)
+        .then(() => navigate('/office'))
+        .catch((err: unknown) => {
+          const apiErr = err as ApiError;
+          setGlobalError(apiErr.message || 'Google sign-in failed.');
+        })
+        .finally(() => setSubmitting(false));
+    }
+  }, [googleLogin, navigate]);
 
   if (!authLoading && isAuthenticated) {
     return <Navigate to="/office" replace />;
