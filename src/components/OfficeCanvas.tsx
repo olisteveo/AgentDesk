@@ -4,7 +4,7 @@ import './OfficeCanvas.css';
 import HireWizard from './modals/HireWizard';
 import { AccountSettingsModal } from './modals/AccountSettingsModal';
 import { listDesks, createDesk, deleteDesk, updateDesk, addModelToDesk, removeModelFromDesk, setPrimaryModel } from '../api/desks';
-import { createTask, runTask as runTaskApi, runTaskWithFeedback, updateTask, openCode } from '../api/tasks';
+import { createTask, runTask as runTaskApi, runTaskWithFeedback, updateTask } from '../api/tasks';
 import type { Desk as BackendDesk } from '../api/desks';
 import type { Task, TaskMessage, DeskAssignment, Agent, Zone, Particle, SpriteDirection } from '../types';
 import TaskThread from './TaskThread';
@@ -13,7 +13,6 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useCostTracker } from '../hooks/useCostTracker';
 import { useTaskManager } from '../hooks/useTaskManager';
 import { isCodeRelatedTask } from '../utils/codeDetection';
-import { parseCodeBlocks } from '../utils/parseCodeBlocks';
 import {
   SPRITE_ASSETS,
   DIRECTION_GRID,
@@ -25,9 +24,8 @@ import {
 } from '../utils/sprites';
 import MeetingRoom from './MeetingRoom';
 import CostDashboard from './CostDashboard';
-import { ClipboardList, DollarSign, X, Trash2, Rss, Download, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles, ChevronDown, LayoutDashboard, Sun, Moon, Paperclip } from 'lucide-react';
+import { ClipboardList, DollarSign, X, Trash2, Rss, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles, ChevronDown, LayoutDashboard, Sun, Moon, Paperclip } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { downloadCodeBlock, downloadAsMarkdown } from '../utils/download';
 import { friendlyError } from '../utils/friendlyErrors';
 import UpgradePrompt from './modals/UpgradePrompt';
 import { classifyTask, recordRoutingDecision } from '../api/routing';
