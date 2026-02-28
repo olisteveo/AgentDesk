@@ -38,6 +38,33 @@ function timeAgo(ts: number): string {
   return `${days}d ago`;
 }
 
+const DESCRIPTION_LIMIT = 280;
+
+/** Truncated task description with expand toggle */
+function TaskDescription({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsTruncation = text.length > DESCRIPTION_LIMIT;
+
+  // Strip "--- Attached: filename ---" blocks for preview
+  const previewText = needsTruncation && !expanded
+    ? text.slice(0, DESCRIPTION_LIMIT).replace(/\s+\S*$/, '') + '...'
+    : text;
+
+  return (
+    <div className="tt-task-desc">
+      <p>{previewText}</p>
+      {needsTruncation && (
+        <button
+          className="tt-desc-toggle"
+          onClick={() => setExpanded(e => !e)}
+        >
+          {expanded ? 'Show less' : 'Show full request'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function TaskThread({
   task,
   messages,
@@ -135,13 +162,17 @@ export default function TaskThread({
           </div>
         </div>
 
-        {/* Description */}
-        {task.description && (
-          <div className="tt-description">{task.description}</div>
-        )}
-
         {/* Message thread */}
         <div className="tt-messages">
+          {/* Show original task request as first user message */}
+          {task.description && (
+            <div className="tt-msg user">
+              <div className="tt-msg-bubble">
+                <TaskDescription text={task.description} />
+              </div>
+            </div>
+          )}
+
           {messages.map((msg, idx) => (
             <div key={msg.id} className={`tt-msg ${msg.role}`}>
               <div className="tt-msg-bubble">
