@@ -772,6 +772,113 @@
   font-size: 12px;
 }
 
+/* ── Task form file attachments ─────────────────── */
+
+.task-attach-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #888;
+  font-size: 12px;
+}
+
+.task-attach-zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-attach-input {
+  display: none;
+}
+
+.task-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.task-attach-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.task-attach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.task-attach-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.task-attach-name {
+  color: #ccc;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-attach-size {
+  color: #666;
+  font-size: 10px;
+}
+
+.task-attach-remove {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+}
+
+.task-attach-remove:hover {
+  color: #ff6b6b;
+}
+
+[data-theme="light"] .task-attach-btn {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: #d0d5e8;
+  color: #888;
+}
+
+[data-theme="light"] .task-attach-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #333;
+}
+
+[data-theme="light"] .task-attach-file {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: #d0d5e8;
+}
+
+[data-theme="light"] .task-attach-name {
+  color: #333;
+}
+
 /* Shared close button (used by feed panel, task result, etc.) */
 .close-btn {
   background: none;
@@ -1898,6 +2005,23 @@
 .feed-task-status.error {
   background: rgba(255, 107, 107, 0.2);
   color: #ff6b6b;
+}
+
+.feed-task-status.needs-review {
+  background: rgba(243, 156, 18, 0.2);
+  color: #f39c12;
+}
+
+.feed-task.review {
+  border-left: 3px solid rgba(243, 156, 18, 0.5);
+}
+
+.feed-task.review.has-result {
+  cursor: pointer;
+}
+
+.feed-task.review.has-result:hover {
+  background: rgba(243, 156, 18, 0.06);
 }
 
 .feed-task.completed.has-result {

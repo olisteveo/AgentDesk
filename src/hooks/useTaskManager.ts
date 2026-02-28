@@ -13,7 +13,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { listTasks, deleteTask, clearAllTasks } from '../api/tasks';
 import type { TaskRow } from '../api/tasks';
-import type { Task, DeskAssignment } from '../types';
+import type { Task, TaskMessage, DeskAssignment } from '../types';
 import { MODEL_PRICING } from '../utils/constants';
 
 const MAX_TASKS = 50;
@@ -39,6 +39,11 @@ function mapTaskRowToTask(row: TaskRow, assignments: DeskAssignment[]): Task {
       : undefined,
     backendId: row.id,
     isCodeTask: row.is_code_task,
+    totalRuns: row.result
+      ? (Array.isArray((row.result as Record<string, unknown>).messages)
+          ? ((row.result as Record<string, unknown>).messages as TaskMessage[]).filter((m: TaskMessage) => m.role === 'agent').length
+          : row.status === 'completed' || row.status === 'review' ? 1 : 0)
+      : 0,
     // Backend doesn't store errorMessage separately — failed tasks won't have it from hydration
     // but live-session failures will set it via setTasks in OfficeCanvas
   };
@@ -50,6 +55,7 @@ export function useTaskManager(opts: {
 }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskResults, setTaskResults] = useState<Record<string, string>>({});
+  const [taskMessages, setTaskMessages] = useState<Record<string, TaskMessage[]>>({});
   const hasHydrated = useRef(false);
 
   // Hydrate tasks from backend once desks are loaded
@@ -69,17 +75,47 @@ export function useTaskManager(opts: {
         const hydrated = rows.map(row => mapTaskRowToTask(row, deskAssignments));
         setTasks(hydrated);
 
-        // Hydrate AI results for completed tasks (stored as JSONB: { content, inputTokens, ... })
+        // Hydrate AI results and messages for completed + review tasks
         const results: Record<string, string> = {};
+        const messages: Record<string, TaskMessage[]> = {};
+
         for (const row of rows) {
-          if (row.status === 'completed' && row.result) {
+          if ((row.status === 'completed' || row.status === 'review') && row.result) {
             const r = row.result as Record<string, unknown>;
-            const content = (r.content as string) || (r.text as string);
-            results[row.id] = content || JSON.stringify(row.result);
+
+            // If backend stored a messages array, use it directly
+            if (Array.isArray(r.messages)) {
+              messages[row.id] = r.messages as TaskMessage[];
+              // Also populate taskResults with the last agent message for backward compat
+              const lastAgent = (r.messages as TaskMessage[])
+                .filter((m: TaskMessage) => m.role === 'agent')
+                .pop();
+              if (lastAgent) results[row.id] = lastAgent.content;
+            } else {
+              // Legacy single-result: wrap as one agent message
+              const content = (r.content as string) || (r.text as string) || JSON.stringify(row.result);
+              results[row.id] = content;
+              messages[row.id] = [{
+                id: `${row.id}-initial`,
+                role: 'agent',
+                content,
+                timestamp: row.completed_at
+                  ? new Date(row.completed_at).getTime()
+                  : new Date(row.created_at).getTime(),
+                cost: row.cost_usd != null ? parseFloat(String(row.cost_usd)) : undefined,
+                modelUsed: row.model_used
+                  ? (MODEL_PRICING[row.model_used]?.name || row.model_used)
+                  : undefined,
+              }];
+            }
           }
         }
+
         if (Object.keys(results).length > 0) {
           setTaskResults(prev => ({ ...prev, ...results }));
+        }
+        if (Object.keys(messages).length > 0) {
+          setTaskMessages(prev => ({ ...prev, ...messages }));
         }
       } catch (err) {
         // Graceful degradation: live feed starts empty, works as before
@@ -96,6 +132,11 @@ export function useTaskManager(opts: {
       delete next[taskId];
       return next;
     });
+    setTaskMessages(prev => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
     try {
       await deleteTask(taskId);
     } catch (err) {
@@ -106,6 +147,7 @@ export function useTaskManager(opts: {
   const clearTasks = useCallback(async () => {
     setTasks([]);
     setTaskResults({});
+    setTaskMessages({});
     try {
       await clearAllTasks();
     } catch (err) {
@@ -113,5 +155,5 @@ export function useTaskManager(opts: {
     }
   }, []);
 
-  return { tasks, setTasks, taskResults, setTaskResults, removeTask, clearTasks } as const;
+  return { tasks, setTasks, taskResults, setTaskResults, taskMessages, setTaskMessages, removeTask, clearTasks } as const;
 }

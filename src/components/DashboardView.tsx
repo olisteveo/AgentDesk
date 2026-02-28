@@ -49,7 +49,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   onViewFailedTask,
   onRemoveTask,
 }) => {
-  const [taskFilter, setTaskFilter] = useState<'all' | 'in-progress' | 'completed' | 'failed'>('all');
+  const [taskFilter, setTaskFilter] = useState<'all' | 'in-progress' | 'review' | 'completed' | 'failed'>('all');
 
   const teamAgents = agents.filter(a => a.id !== 'ceo' && a.id !== 'ops');
 
@@ -59,6 +59,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
   const completedCount = tasks.filter(t => t.status === 'completed').length;
   const activeCount = tasks.filter(t => t.status === 'in-progress').length;
+  const reviewCount = tasks.filter(t => t.status === 'review').length;
   const failedCount = tasks.filter(t => t.status === 'failed').length;
 
   const monthCost = tasks
@@ -84,7 +85,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   const handleTaskClick = (task: Task) => {
     if (task.status === 'failed') {
       onViewFailedTask(task.id);
-    } else if (task.status === 'completed' && taskResults[task.id]) {
+    } else if ((task.status === 'completed' || task.status === 'review') && taskResults[task.id]) {
       onViewTaskResult(task.id);
     }
   };
@@ -162,14 +163,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Filter tabs */}
         <div className="dv-task-filters">
-          {(['all', 'in-progress', 'completed', 'failed'] as const).map(f => (
+          {(['all', 'in-progress', 'review', 'completed', 'failed'] as const).map(f => (
             <button
               key={f}
               className={`dv-filter-btn${taskFilter === f ? ' active' : ''}`}
               onClick={() => setTaskFilter(f)}>
-              {f === 'all' ? 'All' : f === 'in-progress' ? 'Active' : f === 'completed' ? 'Done' : 'Failed'}
+              {f === 'all' ? 'All' : f === 'in-progress' ? 'Active' : f === 'review' ? 'Review' : f === 'completed' ? 'Done' : 'Failed'}
               {f === 'all' && <span className="dv-filter-count">{tasks.length}</span>}
               {f === 'in-progress' && activeCount > 0 && <span className="dv-filter-count">{activeCount}</span>}
+              {f === 'review' && reviewCount > 0 && <span className="dv-filter-count dv-review-count">{reviewCount}</span>}
               {f === 'completed' && completedCount > 0 && <span className="dv-filter-count">{completedCount}</span>}
               {f === 'failed' && failedCount > 0 && <span className="dv-filter-count">{failedCount}</span>}
             </button>
@@ -186,7 +188,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           {filteredTasks.map(task => {
             const assignedAgent = getAgentForTask(task);
             const hasResult = !!taskResults[task.id];
-            const isClickable = task.status === 'failed' || (task.status === 'completed' && hasResult);
+            const isClickable = task.status === 'failed' || ((task.status === 'completed' || task.status === 'review') && hasResult);
             return (
               <div
                 key={task.id}
@@ -194,7 +196,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 onClick={() => handleTaskClick(task)}>
                 <div className="dv-task-top">
                   <span className={`dv-task-status ${task.status}`}>
-                    {task.status === 'in-progress' ? 'Active' : task.status === 'completed' ? 'Done' : task.status === 'failed' ? 'Failed' : 'Pending'}
+                    {task.status === 'in-progress' ? 'Active' : task.status === 'review' ? 'Review' : task.status === 'completed' ? 'Done' : task.status === 'failed' ? 'Failed' : 'Pending'}
                   </span>
                   <div className="dv-task-actions">
                     {task.cost != null && task.cost > 0 && (
@@ -268,6 +270,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="dv-stat-value">{activeCount}</div>
             <div className="dv-stat-label">Active</div>
           </div>
+          {reviewCount > 0 && (
+            <div className="dv-stat-card dv-stat-review">
+              <div className="dv-stat-value">{reviewCount}</div>
+              <div className="dv-stat-label">Review</div>
+            </div>
+          )}
           <div className="dv-stat-card">
             <div className="dv-stat-value">${avgTaskCost.toFixed(4)}</div>
             <div className="dv-stat-label">Avg / Task</div>

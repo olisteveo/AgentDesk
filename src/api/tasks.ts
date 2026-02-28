@@ -12,7 +12,7 @@ export interface TaskRow {
   desk_id: string | null;
   title: string;
   description: string | null;
-  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  status: 'pending' | 'in-progress' | 'completed' | 'failed' | 'review';
   cost_usd: number | null;
   model_used: string | null;
   assigned_model_id: string | null;
@@ -104,6 +104,24 @@ export function getTaskResult(taskId: string): Promise<TaskRow> {
 /** Execute a task against AI (the desk's model). */
 export function runTask(taskId: string): Promise<TaskRunResult> {
   return apiRequest(`/api/tasks/${taskId}/run`, { method: 'POST' });
+}
+
+/** Re-execute a task with user feedback (follow-up in the review loop). */
+export function runTaskWithFeedback(taskId: string, feedback: string): Promise<TaskRunResult> {
+  return apiRequest(`/api/tasks/${taskId}/run`, {
+    method: 'POST',
+    body: JSON.stringify({ feedback }),
+  });
+}
+
+/** Approve a task (move from review -> completed). */
+export function approveTask(taskId: string): Promise<TaskRow> {
+  return updateTask(taskId, { status: 'completed' });
+}
+
+/** Reopen a completed task for further review. */
+export function reopenTask(taskId: string): Promise<TaskRow> {
+  return updateTask(taskId, { status: 'review' });
 }
 
 /** Delete a single task. */

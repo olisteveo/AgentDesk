@@ -4,9 +4,10 @@ import './OfficeCanvas.css';
 import HireWizard from './modals/HireWizard';
 import { AccountSettingsModal } from './modals/AccountSettingsModal';
 import { listDesks, createDesk, deleteDesk, updateDesk, addModelToDesk, removeModelFromDesk, setPrimaryModel } from '../api/desks';
-import { createTask, runTask as runTaskApi, openCode } from '../api/tasks';
+import { createTask, runTask as runTaskApi, runTaskWithFeedback, updateTask, openCode } from '../api/tasks';
 import type { Desk as BackendDesk } from '../api/desks';
-import type { Task, DeskAssignment, Agent, Zone, Particle, SpriteDirection } from '../types';
+import type { Task, TaskMessage, DeskAssignment, Agent, Zone, Particle, SpriteDirection } from '../types';
+import TaskThread from './TaskThread';
 import { useActivityLog } from '../hooks/useActivityLog';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useCostTracker } from '../hooks/useCostTracker';
@@ -24,7 +25,7 @@ import {
 } from '../utils/sprites';
 import MeetingRoom from './MeetingRoom';
 import CostDashboard from './CostDashboard';
-import { ClipboardList, DollarSign, X, Trash2, Rss, Download, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles, ChevronDown, LayoutDashboard, Sun, Moon } from 'lucide-react';
+import { ClipboardList, DollarSign, X, Trash2, Rss, Download, Rocket, Briefcase, Palette, Settings, MessageCircle, Sparkles, ChevronDown, LayoutDashboard, Sun, Moon, Paperclip } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { downloadCodeBlock, downloadAsMarkdown } from '../utils/download';
 import { friendlyError } from '../utils/friendlyErrors';
@@ -130,6 +131,7 @@ const OfficeCanvas: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
+  const [taskAttachments, setTaskAttachments] = useState<File[]>([]);
   const [routingSuggestions, setRoutingSuggestions] = useState<RoutingDeskScore[] | null>(null);
   const [routingLoading, setRoutingLoading] = useState(false);
   const [routingDismissed, setRoutingDismissed] = useState(false);
@@ -180,7 +182,7 @@ const OfficeCanvas: React.FC = () => {
   const { taskLog, addLogEntry } = useActivityLog(onboardingDone);
   const costTracker = useCostTracker(onboardingDone);
   const { todayApiCost, updateTodayCost } = costTracker;
-  const { tasks, setTasks, taskResults, setTaskResults, removeTask, clearTasks } = useTaskManager({
+  const { tasks, setTasks, taskResults, setTaskResults, taskMessages, setTaskMessages, removeTask, clearTasks } = useTaskManager({
     deskAssignments,
     onboardingDone,
   });
@@ -691,8 +693,23 @@ const OfficeCanvas: React.FC = () => {
     const agent = agents.find(a => a.id === selectedAgent);
     const agentName = agent?.name || 'Agent';
     const capturedTitle = taskTitle;
-    const capturedDesc = taskDescription;
     const capturedAgent = selectedAgent;
+    const capturedAttachments = [...taskAttachments];
+
+    // Read file contents and append to description for AI context
+    let capturedDesc = taskDescription;
+    if (capturedAttachments.length > 0) {
+      const fileContents: string[] = [];
+      for (const file of capturedAttachments) {
+        try {
+          const text = await file.text();
+          fileContents.push(`\n\n--- Attached: ${file.name} ---\n${text}`);
+        } catch {
+          fileContents.push(`\n\n--- Attached: ${file.name} (could not read) ---`);
+        }
+      }
+      capturedDesc = (taskDescription || '') + fileContents.join('');
+    }
 
     // Resolve the backend desk ID for this agent
     const localDeskId = selectedAgent.replace('agent-', '');
@@ -778,6 +795,7 @@ const OfficeCanvas: React.FC = () => {
     setShowTaskForm(false);
     setTaskTitle('');
     setTaskDescription('');
+    setTaskAttachments([]);
     setSelectedAgent('');
     setRoutingSuggestions(null);
     setRoutingDismissed(false);
@@ -794,18 +812,29 @@ const OfficeCanvas: React.FC = () => {
 
       const result = await runTaskApi(backendTask.id);
 
-      // Update local task with real cost, result, and backend ID
+      // Update local task with real cost, result, and backend ID — status: review (awaiting user approval)
       setTasks(prev => prev.map(t =>
         t.id === localTask.id
-          ? { ...t, status: 'completed', completedAt: Date.now(), cost: result.costUsd, modelUsed: MODEL_PRICING[result.model]?.name || result.model, backendId: backendTask.id }
+          ? { ...t, status: 'review', cost: result.costUsd, modelUsed: MODEL_PRICING[result.model]?.name || result.model, backendId: backendTask.id, totalRuns: 1 }
           : t
       ));
 
       updateTodayCost(result.costUsd);
-      addLogEntry(`${agentName} completed "${capturedTitle}" — $${result.costUsd.toFixed(4)} (${result.latencyMs}ms)`);
+      addLogEntry(`${agentName} delivered "${capturedTitle}" — $${result.costUsd.toFixed(4)} — awaiting review`);
 
-      // Store the AI result for display
+      // Store the AI result for display (backward compat)
       setTaskResults(prev => ({ ...prev, [localTask.id]: result.result }));
+
+      // Create initial agent message in conversation thread
+      const initialMsg: TaskMessage = {
+        id: `${localTask.id}-msg-1`,
+        role: 'agent',
+        content: result.result,
+        timestamp: Date.now(),
+        cost: result.costUsd,
+        modelUsed: MODEL_PRICING[result.model]?.name || result.model,
+      };
+      setTaskMessages(prev => ({ ...prev, [localTask.id]: [initialMsg] }));
 
       // Trigger memory animation on the agent avatar (task memory being generated)
       const taskDeskId = capturedAgent.replace('agent-', '');
@@ -903,7 +932,150 @@ const OfficeCanvas: React.FC = () => {
         return a;
       }));
     }
-  }, [selectedAgent, taskTitle, taskDescription, agents, deskAssignments, addLogEntry, getModelForAgent, calculateZones, updateTodayCost, routingSuggestions]);
+  }, [selectedAgent, taskTitle, taskDescription, taskAttachments, agents, deskAssignments, addLogEntry, getModelForAgent, calculateZones, updateTodayCost, routingSuggestions]);
+
+  // ── Review flow handlers ─────────────────────────────────────
+
+  /** Approve a task: move from review -> completed. */
+  const handleApproveTask = useCallback(async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, status: 'completed' as const, completedAt: Date.now() } : t
+    ));
+    addLogEntry(`Approved "${task.name}"`);
+
+    if (task.backendId) {
+      try { await updateTask(task.backendId, { status: 'completed' }); } catch (err) {
+        console.error('Failed to approve task on backend:', err);
+      }
+    }
+  }, [tasks, addLogEntry]);
+
+  /** Request changes on a task: send feedback, re-run AI. */
+  const handleRequestChanges = useCallback(async (taskId: string, feedback: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || !task.backendId) return;
+
+    const agent = agents.find(a => a.id === task.assignee);
+    const agentName = agent?.name || 'Agent';
+
+    // Append user feedback to message thread
+    const userMsg: TaskMessage = {
+      id: `${taskId}-msg-${Date.now()}`,
+      role: 'user',
+      content: feedback,
+      timestamp: Date.now(),
+    };
+    setTaskMessages(prev => ({
+      ...prev,
+      [taskId]: [...(prev[taskId] || []), userMsg],
+    }));
+
+    // Set task to in-progress, agent starts working again
+    setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, status: 'in-progress' as const } : t
+    ));
+
+    // Move agent to desk and start working animation
+    const localDeskId = task.assignee.replace('agent-', '');
+    const zones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
+    const agentZone = zones[localDeskId];
+    if (agent && agentZone) {
+      setAgents(prev => prev.map(a =>
+        a.id === task.assignee
+          ? { ...a, isWorking: true, targetX: agentZone.x + a.deskOffset.x, targetY: agentZone.y + a.deskOffset.y }
+          : a
+      ));
+    }
+
+    addLogEntry(`Requested changes on "${task.name}"`);
+
+    try {
+      const result = await runTaskWithFeedback(task.backendId, feedback);
+
+      // Append agent response to thread
+      const agentMsg: TaskMessage = {
+        id: `${taskId}-msg-${Date.now()}-agent`,
+        role: 'agent',
+        content: result.result,
+        timestamp: Date.now(),
+        cost: result.costUsd,
+        modelUsed: MODEL_PRICING[result.model]?.name || result.model,
+      };
+      setTaskMessages(prev => ({
+        ...prev,
+        [taskId]: [...(prev[taskId] || []), agentMsg],
+      }));
+
+      // Update task: back to review, accumulate cost
+      setTasks(prev => prev.map(t =>
+        t.id === taskId ? {
+          ...t,
+          status: 'review' as const,
+          cost: (t.cost || 0) + result.costUsd,
+          modelUsed: MODEL_PRICING[result.model]?.name || result.model,
+          totalRuns: (t.totalRuns || 1) + 1,
+        } : t
+      ));
+
+      // Update result for backward compat
+      setTaskResults(prev => ({ ...prev, [taskId]: result.result }));
+      updateTodayCost(result.costUsd);
+      addLogEntry(`${agentName} re-delivered "${task.name}" — $${result.costUsd.toFixed(4)}`);
+
+      // Walk agent to CEO desk
+      const ceoZone = zones.ceo;
+      if (ceoZone && agent) {
+        setAgents(prev => prev.map(a =>
+          a.id === task.assignee
+            ? { ...a, isWorking: false, targetX: ceoZone.x + 60, targetY: ceoZone.y + 10 }
+            : a
+        ));
+        setTimeout(() => {
+          const freshZones = calculateZones(dimensionsRef.current.width, dimensionsRef.current.height);
+          const homeZone = freshZones[localDeskId];
+          setAgents(prev => prev.map(a =>
+            a.id === task.assignee
+              ? { ...a, targetX: homeZone ? homeZone.x + a.deskOffset.x : a.x, targetY: homeZone ? homeZone.y + a.deskOffset.y : a.y }
+              : a
+          ));
+        }, 3000);
+      } else {
+        setAgents(prev => prev.map(a =>
+          a.id === task.assignee ? { ...a, isWorking: false } : a
+        ));
+      }
+    } catch (err) {
+      console.error('Failed to re-run task with feedback:', err);
+      // On failure, revert to review so user can try again
+      setTasks(prev => prev.map(t =>
+        t.id === taskId ? { ...t, status: 'review' as const } : t
+      ));
+      setAgents(prev => prev.map(a =>
+        a.id === task.assignee ? { ...a, isWorking: false } : a
+      ));
+      addLogEntry(`Failed to re-run "${task.name}" — try again`);
+    }
+  }, [tasks, agents, addLogEntry, calculateZones, updateTodayCost]);
+
+  /** Reopen a completed task for further review. */
+  const handleReopenTask = useCallback(async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, status: 'review' as const, completedAt: undefined } : t
+    ));
+    addLogEntry(`Reopened "${task.name}"`);
+
+    if (task.backendId) {
+      try { await updateTask(task.backendId, { status: 'review' }); } catch (err) {
+        console.error('Failed to reopen task on backend:', err);
+      }
+    }
+  }, [tasks, addLogEntry]);
 
   // Meeting room logic extracted to MeetingRoom.tsx
 
@@ -1878,10 +2050,21 @@ const OfficeCanvas: React.FC = () => {
           <div className="task-feed-header" onClick={() => setShowFeedPanel(true)} style={{ cursor: 'pointer' }}>
             <h3>Live Feed</h3>
             <span className="task-feed-count">
-              {tasks.filter(t => t.status === 'in-progress').length > 0 && (
+              {(tasks.filter(t => t.status === 'in-progress').length > 0 || tasks.filter(t => t.status === 'review').length > 0) && (
                 <span className="pulse-dot" />
               )}
-              {tasks.filter(t => t.status === 'in-progress').length} active
+              {tasks.filter(t => t.status === 'in-progress').length > 0
+                ? `${tasks.filter(t => t.status === 'in-progress').length} active`
+                : ''
+              }
+              {tasks.filter(t => t.status === 'review').length > 0
+                ? `${tasks.filter(t => t.status === 'in-progress').length > 0 ? ' · ' : ''}${tasks.filter(t => t.status === 'review').length} review`
+                : ''
+              }
+              {tasks.filter(t => t.status === 'in-progress').length === 0 && tasks.filter(t => t.status === 'review').length === 0
+                ? '0 active'
+                : ''
+              }
               {tasks.length > 0 && (
                 <button className="feed-clear-btn" onClick={(e) => { e.stopPropagation(); clearTasks(); }}>Clear</button>
               )}
@@ -1905,6 +2088,35 @@ const OfficeCanvas: React.FC = () => {
                       <div className="feed-task-elapsed">
                         {Math.round((Date.now() - task.createdAt) / 1000)}s elapsed
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Needs Review — tasks awaiting user approval */}
+            {tasks.filter(t => t.status === 'review').length > 0 && (
+              <div className="review-tasks-feed">
+                {tasks.filter(t => t.status === 'review').map(task => {
+                  const agent = agents.find(a => a.id === task.assignee);
+                  return (
+                    <div key={task.id} className="feed-task review has-result"
+                         onClick={() => { setShowFeedPanel(false); setViewingTaskResult(task.id); }}
+                         style={{ cursor: 'pointer' }}>
+                      <div className="feed-task-header">
+                        <span className="feed-task-status needs-review">Review</span>
+                        <span className="feed-task-cost">${task.cost?.toFixed(4) || '---'}</span>
+                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                      <div className="feed-task-title">{task.name}</div>
+                      <div className="feed-task-meta">
+                        <span>{agent?.name}</span>
+                        <span>{task.modelUsed}</span>
+                        {task.totalRuns && task.totalRuns > 1 && <span>{task.totalRuns} runs</span>}
+                      </div>
+                      <div className="feed-task-view">Click to review</div>
                     </div>
                   );
                 })}
@@ -2083,6 +2295,44 @@ const OfficeCanvas: React.FC = () => {
               />
             </div>
 
+            {/* File attachments for context */}
+            <div className="form-group">
+              <label className="task-attach-label">
+                <Paperclip size={13} />
+                Attach files for context
+              </label>
+              <div className="task-attach-zone">
+                <input
+                  type="file"
+                  multiple
+                  accept=".txt,.md,.json,.csv,.js,.ts,.tsx,.jsx,.py,.html,.css,.xml,.yaml,.yml,.sql,.sh,.env,.log,.pdf"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setTaskAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+                    }
+                  }}
+                  className="task-attach-input"
+                  id="task-file-input"
+                />
+                <label htmlFor="task-file-input" className="task-attach-btn">
+                  <Paperclip size={12} /> Add files
+                </label>
+                {taskAttachments.length > 0 && (
+                  <div className="task-attach-list">
+                    {taskAttachments.map((file, i) => (
+                      <div key={i} className="task-attach-file">
+                        <span className="task-attach-name">{file.name}</span>
+                        <span className="task-attach-size">{(file.size / 1024).toFixed(1)}KB</span>
+                        <button className="task-attach-remove" onClick={() => setTaskAttachments(prev => prev.filter((_, idx) => idx !== i))}>
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* ── Routing Suggestion Banner ── */}
             {routingLoading && taskTitle.trim().length >= 5 && (
               <div className="routing-suggestion loading">
@@ -2173,7 +2423,7 @@ const OfficeCanvas: React.FC = () => {
               <button onClick={assignTask} disabled={!selectedAgent || !taskTitle}>
                 Assign Task
               </button>
-              <button onClick={() => { setShowTaskForm(false); setRoutingSuggestions(null); setRoutingDismissed(false); }} className="secondary">
+              <button onClick={() => { setShowTaskForm(false); setTaskAttachments([]); setRoutingSuggestions(null); setRoutingDismissed(false); }} className="secondary">
                 Cancel
               </button>
             </div>
@@ -2227,6 +2477,35 @@ const OfficeCanvas: React.FC = () => {
                       <div className="feed-task-elapsed">
                         {Math.round((Date.now() - task.createdAt) / 1000)}s elapsed
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {tasks.filter(t => t.status === 'review').length > 0 && (
+              <div className="feed-section">
+                <h3>Needs Review ({tasks.filter(t => t.status === 'review').length})</h3>
+                {tasks.filter(t => t.status === 'review').map(task => {
+                  const agent = agents.find(a => a.id === task.assignee);
+                  return (
+                    <div key={task.id} className="feed-task review has-result"
+                         onClick={() => { setShowFeedPanel(false); setViewingTaskResult(task.id); }}
+                         style={{ cursor: 'pointer' }}>
+                      <div className="feed-task-header">
+                        <span className="feed-task-status needs-review">Review</span>
+                        <span className="feed-task-cost">${task.cost?.toFixed(4) || '---'}</span>
+                        <button className="feed-task-delete" onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}>
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                      <div className="feed-task-title">{task.name}</div>
+                      <div className="feed-task-meta">
+                        <span>{agent?.name}</span>
+                        <span>{task.modelUsed}</span>
+                        {task.totalRuns && task.totalRuns > 1 && <span>{task.totalRuns} runs</span>}
+                      </div>
+                      <div className="feed-task-view">Click to review</div>
                     </div>
                   );
                 })}
@@ -2302,102 +2581,32 @@ const OfficeCanvas: React.FC = () => {
         </div>
       )}
 
-      {/* Task Result Viewer */}
-      {viewingTaskResult && taskResults[viewingTaskResult] && (
-        <div className="task-result-overlay" onClick={() => setViewingTaskResult(null)}>
-          <div className="task-result-modal" onClick={e => e.stopPropagation()}>
-            <div className="task-result-header">
-              <h2>Task Result</h2>
-              <div className="task-result-header-actions">
-                <button
-                  className="download-response-btn"
-                  onClick={() => {
-                    const task = tasks.find(t => t.id === viewingTaskResult);
-                    downloadAsMarkdown(taskResults[viewingTaskResult!], task?.name || 'task-result');
-                  }}
-                  title="Download as .md"
-                >
-                  <Download size={14} />
-                  Download
-                </button>
-                <button className="close-btn" onClick={() => setViewingTaskResult(null)}><X size={16} /></button>
-              </div>
-            </div>
-            <div className="task-result-info">
-              {(() => {
-                const task = tasks.find(t => t.id === viewingTaskResult);
-                const agent = task ? agents.find(a => a.id === task.assignee) : null;
-                return task ? (
-                  <>
-                    <div className="result-meta">
-                      <span className="result-task-title">{task.name}</span>
-                      <span className="result-agent">{agent?.name}</span>
-                      <span className="result-model">{task.modelUsed}</span>
-                      {task.cost !== undefined && <span className="result-cost">${task.cost.toFixed(4)}</span>}
-                    </div>
-                    {task.description && <div className="result-description">{task.description}</div>}
-                  </>
-                ) : null;
-              })()}
-            </div>
-            <div className="task-result-content">
-              {parseCodeBlocks(taskResults[viewingTaskResult]).map((seg, i) =>
-                seg.type === 'text' ? (
-                  <pre key={i}>{seg.content}</pre>
-                ) : (
-                  <div key={i} className="code-block">
-                    <div className="code-block-header">
-                      <span className="code-block-lang">{seg.language}</span>
-                      <div className="code-block-actions">
-                        <button
-                          className="code-block-copy"
-                          onClick={async (e) => {
-                            const btn = e.currentTarget;
-                            try {
-                              await navigator.clipboard.writeText(seg.content);
-                              btn.textContent = 'Copied';
-                              setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-                            } catch { /* clipboard unavailable */ }
-                          }}
-                        >
-                          Copy
-                        </button>
-                        <button
-                          className="code-block-download"
-                          onClick={() => downloadCodeBlock(seg.content, seg.language)}
-                          title="Download file"
-                        >
-                          <Download size={10} />
-                        </button>
-                        <button
-                          className="code-block-open"
-                          onClick={async (e) => {
-                            const btn = e.currentTarget;
-                            try {
-                              const { filePath } = await openCode(seg.content, seg.language);
-                              window.location.href = `vscode://file${filePath}`;
-                              btn.textContent = 'Sent to VS Code';
-                              setTimeout(() => { btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.583 2.286l-4.574 4.596L7.722 2.67 2 5.39v13.202l5.704 2.737 5.307-4.212 4.572 4.597L24 18.58V5.402l-6.417-3.116zM7.7 15.094L4.709 12l2.99-3.094v6.188zm9.88 2.318l-4.496-3.624 4.496-3.624v7.248z"/></svg> VS Code'; }, 2000);
-                            } catch (err) {
-                              console.error('Failed to open in VS Code:', err);
-                            }
-                          }}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M17.583 2.286l-4.574 4.596L7.722 2.67 2 5.39v13.202l5.704 2.737 5.307-4.212 4.572 4.597L24 18.58V5.402l-6.417-3.116zM7.7 15.094L4.709 12l2.99-3.094v6.188zm9.88 2.318l-4.496-3.624 4.496-3.624v7.248z"/>
-                          </svg>
-                          VS Code
-                        </button>
-                      </div>
-                    </div>
-                    <pre><code>{seg.content}</code></pre>
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Task Thread (review / result viewer) */}
+      {viewingTaskResult && (() => {
+        const threadTask = tasks.find(t => t.id === viewingTaskResult);
+        if (!threadTask) return null;
+        // Build messages: prefer taskMessages, fall back to wrapping single result
+        const msgs = taskMessages[viewingTaskResult] || (taskResults[viewingTaskResult] ? [{
+          id: `${viewingTaskResult}-legacy`,
+          role: 'agent' as const,
+          content: taskResults[viewingTaskResult],
+          timestamp: threadTask.completedAt || threadTask.createdAt,
+          cost: threadTask.cost,
+          modelUsed: threadTask.modelUsed,
+        }] : []);
+        if (msgs.length === 0) return null;
+        return (
+          <TaskThread
+            task={threadTask}
+            messages={msgs}
+            agents={agents}
+            onClose={() => setViewingTaskResult(null)}
+            onApprove={handleApproveTask}
+            onRequestChanges={handleRequestChanges}
+            onReopen={handleReopenTask}
+          />
+        );
+      })()}
 
       {/* Failed task detail modal */}
       {viewingFailedTask && (() => {

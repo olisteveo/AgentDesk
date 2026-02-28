@@ -40,12 +40,21 @@ export interface Particle {
   color: string;
 }
 
+export interface TaskMessage {
+  id: string;
+  role: 'agent' | 'user';
+  content: string;
+  timestamp: number;
+  cost?: number;        // agent messages only — cost for this specific run
+  modelUsed?: string;   // agent messages only
+}
+
 export interface Task {
   id: string;
   name: string;
   description: string;
   assignee: string;
-  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  status: 'pending' | 'in-progress' | 'completed' | 'failed' | 'review';
   createdAt: number;
   completedAt?: number;
   cost?: number;
@@ -53,6 +62,8 @@ export interface Task {
   errorMessage?: string;
   backendId?: string;
   isCodeTask?: boolean;
+  messages?: TaskMessage[];   // conversation thread (optional for backward compat)
+  totalRuns?: number;         // how many times the AI has executed on this task
 }
 
 export interface ChatMessage {
