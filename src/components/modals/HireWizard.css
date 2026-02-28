@@ -948,6 +948,29 @@
     border-radius: 0;
     padding: 20px;
     padding-bottom: calc(20px + var(--safe-bottom, 0px));
+    /* Flex column so body scrolls and nav stays pinned at bottom */
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+  }
+
+  .hire-wizard-header,
+  .wizard-mode-tabs,
+  .hire-wizard-progress,
+  .hire-wizard-step-label {
+    flex-shrink: 0;
+  }
+
+  .hire-wizard-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+  }
+
+  .hire-wizard-nav {
+    flex-shrink: 0;
   }
 
   .archetype-grid {
