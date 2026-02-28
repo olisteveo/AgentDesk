@@ -10,7 +10,7 @@ import { AVAILABLE_MODELS, MODEL_PRICING } from '../utils/constants';
 import type { Agent, Task, DeskAssignment } from '../types';
 import {
   MessageCircle, Plus, Zap, DollarSign, Trash2,
-  Eye, AlertTriangle, Sun, Moon, BarChart3,
+  Eye, AlertTriangle, BarChart3,
 } from 'lucide-react';
 import './DashboardView.css';
 
@@ -39,9 +39,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   todayApiCost,
   taskLog,
   taskResults,
-  theme,
+  theme: _theme,
   memoryCountMap,
-  onToggleTheme,
+  onToggleTheme: _onToggleTheme,
   onAgentClick,
   onCreateTask,
   onOpenCostPanel,

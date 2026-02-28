@@ -213,10 +213,10 @@ const OfficeCanvas: React.FC = () => {
 
   // Rules dashboard state
   const [showRulesDashboard, setShowRulesDashboard] = useState(false);
-  const [rulesCount, setRulesCount] = useState(0);
-  const [rulesPreview, setRulesPreview] = useState<string[]>([]);
+  const [, setRulesCount] = useState(0);
+  const [, setRulesPreview] = useState<string[]>([]);
   const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0);
-  const [corePresetName, setCorePresetName] = useState<string | null>(null);
+  const [, setCorePresetName] = useState<string | null>(null);
 
   // Routing insights modal state
   const [showRoutingInsights, setShowRoutingInsights] = useState(false);

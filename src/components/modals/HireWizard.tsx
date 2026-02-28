@@ -15,7 +15,7 @@ import { validateName } from '../../utils/profanityFilter';
 import { ChevronDown, Code, PenTool, Search, Palette, BarChart3, Sparkles } from 'lucide-react';
 
 // Map archetype icon identifiers to lucide-react components
-const ARCHETYPE_ICONS: Record<string, React.FC<{ size?: number; strokeWidth?: number }>> = {
+const ARCHETYPE_ICONS: Record<string, React.FC<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>> = {
   code: Code,
   'pen-tool': PenTool,
   search: Search,
