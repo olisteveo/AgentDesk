@@ -946,20 +946,20 @@
     max-height: var(--vh-full, 100vh);
     height: var(--vh-full, 100vh);
     border-radius: 0;
-    padding: 20px 20px 0;
-  }
-
-  .hire-wizard-body {
-    padding-bottom: calc(20px + var(--safe-bottom, 0px));
+    padding: 20px;
+    padding-bottom: calc(76px + var(--safe-bottom, 0px));
   }
 
   .hire-wizard-nav {
-    position: sticky;
+    position: fixed;
     bottom: 0;
+    left: 0;
+    right: 0;
+    margin: 0;
     background: #1a1a2e;
-    margin: 0 -20px;
-    padding: 16px 20px calc(20px + var(--safe-bottom, 0px));
+    padding: 16px 20px calc(16px + var(--safe-bottom, 0px));
     border-top: 1px solid #333;
+    z-index: 10;
   }
 
   [data-theme="light"] .hire-wizard-nav {
