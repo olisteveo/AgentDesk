@@ -782,8 +782,30 @@
 }
 
 .archetype-icon {
-  font-size: 28px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.1));
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: all 0.2s;
+}
+
+.archetype-card:hover .archetype-icon {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.15));
+  border-color: rgba(102, 126, 234, 0.35);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.archetype-card.selected .archetype-icon {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.2));
+  border-color: rgba(102, 126, 234, 0.5);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .archetype-title {
@@ -1124,6 +1146,26 @@
 
 [data-theme="light"] .archetype-tagline {
   color: #888;
+}
+
+[data-theme="light"] .archetype-icon {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.06));
+  border-color: rgba(102, 126, 234, 0.2);
+  color: #667eea;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="light"] .archetype-card:hover .archetype-icon {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.18), rgba(118, 75, 162, 0.1));
+  border-color: rgba(102, 126, 234, 0.35);
+  color: #5568d0;
+}
+
+[data-theme="light"] .archetype-card.selected .archetype-icon {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.22), rgba(118, 75, 162, 0.14));
+  border-color: rgba(102, 126, 234, 0.5);
+  color: #4458c0;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 [data-theme="light"] .model-card {

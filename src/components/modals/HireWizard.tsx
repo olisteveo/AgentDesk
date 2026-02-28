@@ -12,7 +12,17 @@ import ApiKeyDetectInput from '../ui/ApiKeyDetectInput';
 import type { DetectedProvider } from '../ui/ApiKeyDetectInput';
 import type { Zone, DeskType, DeskAssignment } from '../../types';
 import { validateName } from '../../utils/profanityFilter';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Code, PenTool, Search, Palette, BarChart3, Sparkles } from 'lucide-react';
+
+// Map archetype icon identifiers to lucide-react components
+const ARCHETYPE_ICONS: Record<string, React.FC<{ size?: number; strokeWidth?: number }>> = {
+  code: Code,
+  'pen-tool': PenTool,
+  search: Search,
+  palette: Palette,
+  'bar-chart': BarChart3,
+  sparkles: Sparkles,
+};
 import './HireWizard.css';
 
 const DESK_OPTIONS: { key: DeskType; label: string; asset: string }[] = [
@@ -441,7 +451,9 @@ const HireWizard: React.FC<HireWizardProps> = ({
                         type="button"
                         className={`archetype-card${selectedArchetype?.id === arch.id ? ' selected' : ''}`}
                         onClick={() => setSelectedArchetype(arch)}>
-                        <span className="archetype-icon">{arch.icon}</span>
+                        <span className="archetype-icon">
+                          {(() => { const Icon = ARCHETYPE_ICONS[arch.icon]; return Icon ? <Icon size={24} strokeWidth={1.5} /> : null; })()}
+                        </span>
                         <span className="archetype-title">{arch.title}</span>
                         <span className="archetype-tagline">{arch.tagline}</span>
                       </button>
@@ -650,7 +662,10 @@ const HireWizard: React.FC<HireWizardProps> = ({
                     <div className="wizard-summary-title">Summary</div>
                     <div className="wizard-summary-grid">
                       <div><span className="wizard-summary-label">Role: </span>
-                        <span className="wizard-summary-value">{selectedArchetype?.icon} {selectedArchetype?.title}</span>
+                        <span className="wizard-summary-value">
+                          {(() => { const Icon = selectedArchetype ? ARCHETYPE_ICONS[selectedArchetype.icon] : null; return Icon ? <Icon size={14} strokeWidth={1.5} style={{ verticalAlign: '-2px', marginRight: '4px', opacity: 0.7 }} /> : null; })()}
+                          {selectedArchetype?.title}
+                        </span>
                       </div>
                       <div><span className="wizard-summary-label">Model: </span>
                         <span className="wizard-summary-value">{AVAILABLE_MODELS.find(m => m.id === model)?.name || model}</span>

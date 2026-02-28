@@ -35,6 +35,7 @@ import { validateName } from '../utils/profanityFilter';
 import RulesDashboard from './modals/RulesDashboard';
 import RoutingInsightsModal from './modals/RoutingInsightsModal';
 import AgentChat from './AgentChat';
+import { getAgentMemories } from '../api/memory';
 import DashboardView from './DashboardView';
 import { listRules } from '../api/rules';
 import { CORE_RULES_PRESETS } from '../utils/coreRulesPresets';
@@ -242,6 +243,50 @@ const OfficeCanvas: React.FC = () => {
 
   // Agent chat state (1-on-1 chat panel)
   const [chatAgent, setChatAgent] = useState<Agent | null>(null);
+
+  // Memory indicator state (for office view dots + generation animation)
+  const [memoryCountMap, setMemoryCountMap] = useState<Record<string, number>>({});
+  const [generatingMemory, setGeneratingMemory] = useState<Record<string, number>>({});
+
+  // ── Memory count fetch (lightweight: limit=1, just need total) ────────
+  useEffect(() => {
+    if (!onboardingDone || deskAssignments.length === 0) return;
+    const fetchCounts = async () => {
+      const counts: Record<string, number> = {};
+      await Promise.allSettled(
+        deskAssignments
+          .filter(a => a.backendDeskId)
+          .map(async (a) => {
+            try {
+              const result = await getAgentMemories(a.backendDeskId!, 1, 0);
+              counts[a.backendDeskId!] = result.total;
+            } catch { /* ignore */ }
+          })
+      );
+      setMemoryCountMap(counts);
+    };
+    fetchCounts();
+  }, [onboardingDone, deskAssignments]);
+
+  // Trigger memory animation on an agent avatar (expanding ring + sparkles for 3s)
+  const triggerMemoryAnimation = useCallback((localDeskId: string) => {
+    setGeneratingMemory(prev => ({ ...prev, [localDeskId]: Date.now() }));
+    setTimeout(() => {
+      setGeneratingMemory(prev => {
+        const next = { ...prev };
+        delete next[localDeskId];
+        return next;
+      });
+    }, 3000);
+    // Also bump the memory count optimistically
+    const assignment = deskAssignments.find(a => a.deskId === localDeskId);
+    if (assignment?.backendDeskId) {
+      setMemoryCountMap(prev => ({
+        ...prev,
+        [assignment.backendDeskId!]: (prev[assignment.backendDeskId!] ?? 0) + 1,
+      }));
+    }
+  }, [deskAssignments]);
 
   // Upgrade prompt state (shown when user hits a tier limit)
   const [upgradePrompt, setUpgradePrompt] = useState<{
@@ -754,6 +799,10 @@ const OfficeCanvas: React.FC = () => {
       // Store the AI result for display
       setTaskResults(prev => ({ ...prev, [localTask.id]: result.result }));
 
+      // Trigger memory animation on the agent avatar (task memory being generated)
+      const taskDeskId = capturedAgent.replace('agent-', '');
+      triggerMemoryAnimation(taskDeskId);
+
       // Refresh rules summary after a delay (AI may suggest new rules after task completion)
       setTimeout(() => loadRulesSummary(), 6000);
 
@@ -1122,6 +1171,61 @@ const OfficeCanvas: React.FC = () => {
         ctx.beginPath();
         ctx.arc(avX, avY + 2, 5, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // Memory dot -- bottom-right (static purple indicator if agent has memories)
+      const localDeskId = agent.id.replace('agent-', '');
+      const agentAssignment = deskAssignments.find(a => a.deskId === localDeskId);
+      const memCount = agentAssignment?.backendDeskId ? (memoryCountMap[agentAssignment.backendDeskId] ?? 0) : 0;
+      if (memCount > 0 && agent.id !== 'ceo') {
+        const memDotX = avX + avW - 2;
+        const memDotY = avY + avH - 4;
+        const pulse = 0.4 + 0.12 * Math.sin(time / 800);
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#a29bfe';
+        ctx.beginPath();
+        ctx.arc(memDotX, memDotY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(memDotX, memDotY, 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // "Generating memory" animation -- expanding purple ring + sparkles (3s)
+      const memGenStart = generatingMemory[localDeskId];
+      if (memGenStart) {
+        const elapsed = Date.now() - memGenStart;
+        const progress = Math.min(elapsed / 3000, 1);
+        const fadeOut = Math.max(0, 1 - progress);
+
+        const cx = avX + avW / 2;
+        const cy = avY + avH / 2;
+        const ringRadius = (avW / 2) + 4 + progress * 8;
+
+        ctx.save();
+        // Expanding ring
+        ctx.globalAlpha = fadeOut * 0.6;
+        ctx.strokeStyle = '#a29bfe';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Sparkle particles rising upward
+        for (let i = 0; i < 3; i++) {
+          const particleY = cy - (progress * 20) - i * 6;
+          const particleX = cx + Math.sin((elapsed / 200) + i * 2) * 8;
+          ctx.globalAlpha = fadeOut * (0.8 - i * 0.2);
+          ctx.fillStyle = '#a29bfe';
+          ctx.beginPath();
+          ctx.arc(particleX, particleY, 2 - i * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
       }
     };
 
@@ -1913,6 +2017,7 @@ const OfficeCanvas: React.FC = () => {
           taskLog={taskLog}
           taskResults={taskResults}
           theme={theme}
+          memoryCountMap={memoryCountMap}
           onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
           onAgentClick={(agent) => setChatAgent(agent)}
           onCreateTask={() => setShowTaskForm(true)}
@@ -2583,6 +2688,7 @@ const OfficeCanvas: React.FC = () => {
           updateTodayCost={updateTodayCost}
           addLogEntry={addLogEntry}
           onClose={() => setChatAgent(null)}
+          onMemoryGenerated={triggerMemoryAnimation}
           modelPricing={MODEL_PRICING}
         />
       )}

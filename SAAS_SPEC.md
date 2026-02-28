@@ -542,6 +542,9 @@ spec:
 | AI rule suggestions | Yes | Yes | Yes |
 | Agent Chat (1-on-1) | Yes | Yes | Yes |
 | Chat history / desk | 50 messages | 50 messages | 50 messages |
+| Agent memory / desk | 50 episodic | 500 episodic | Unlimited |
+| Semantic compression | No | Yes (daily) | Yes (hourly) |
+| Vector memory search | No | Yes | Yes |
 | API access | No | Yes | Yes + Webhooks |
 | Support | Community | Email | Slack + Phone |
 
@@ -726,6 +729,142 @@ saveChatMessages(deskId, user, assistant, model, cost)
 - Clear history action
 - Responsive: full-width under 500px
 
+### 12. Agent Memory System
+
+Agents build persistent memory from interactions, allowing them to recall past conversations, task outcomes, and meeting context. Memory is encrypted at rest (AES-256-GCM) and scoped per-desk.
+
+**Three-Layer Architecture:**
+
+| Layer | Purpose | Storage | Tier |
+|-------|---------|---------|------|
+| Episodic | Per-interaction summaries (chat sessions, tasks, meetings) | `agent_episodic_memories` | All |
+| Semantic | Distilled long-term facts compressed from episodic memories | `agent_semantic_memories` | Pro/Enterprise |
+| Retrieval | Combines recency-weighted + vector similarity search | pgvector cosine similarity | All (vector for Pro+) |
+
+**Database Schema:**
+```sql
+-- Episodic memories (one per interaction)
+create table agent_episodic_memories (
+  id uuid primary key default gen_random_uuid(),
+  desk_id uuid not null references desks(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  source varchar(20) not null,        -- 'chat' | 'task' | 'meeting'
+  source_id text,
+  summary_encrypted text not null,    -- AES-256-GCM encrypted
+  embedding vector(1536),             -- OpenAI text-embedding-3-small
+  metadata jsonb default '{}',
+  interaction_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+-- Semantic memories (compressed long-term facts)
+create table agent_semantic_memories (
+  id uuid primary key default gen_random_uuid(),
+  desk_id uuid not null references desks(id) on delete cascade,
+  team_id uuid not null references teams(id) on delete cascade,
+  fact_encrypted text not null,
+  category varchar(50) not null,
+  confidence numeric(3,2) default 0.8,
+  source_memory_ids uuid[] default '{}',
+  embedding vector(1536),
+  last_refreshed timestamptz default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Compression audit log
+create table memory_compression_log (
+  id uuid primary key default gen_random_uuid(),
+  desk_id uuid not null references desks(id) on delete cascade,
+  episodic_count int not null,
+  facts_generated int not null,
+  facts_updated int not null,
+  model_used varchar(100) not null,
+  created_at timestamptz not null default now()
+);
+```
+
+**Memory Generation Flow:**
+```
+Chat session ends (4+ messages) / Task completes / Meeting ends
+         |
+         v
+memoryGenerator.ts (fire-and-forget)
+  |-- sanitize content (strip secrets, PII patterns)
+  |-- summarize via cheapest AI model (cheapAICaller.ts)
+  |-- generate embedding (embeddingService.ts, 1536-dim)
+  |-- encrypt summary (AES-256-GCM)
+  |-- insert into agent_episodic_memories
+         |
+         v (daily cron, Pro/Enterprise only)
+memoryCompressor.ts
+  |-- batch episodic memories (30+ uncompressed)
+  |-- AI extracts facts, categories, confidence scores
+  |-- upsert into agent_semantic_memories
+  |-- log compression run
+```
+
+**Memory Retrieval (injected into AI system prompt):**
+```
+buildMemoryContext(deskId, currentMessages)
+  |-- Recent episodic: last 5 memories by interaction_at
+  |-- Relevant episodic: top 3 by vector similarity to current conversation
+  |-- Semantic facts: all facts for desk (Pro/Enterprise)
+  |-- Deduplicate, format as "What You Remember" prompt block
+  |-- Injected at all 4 AI callpoints (task exec, task chat, desk chat, meetings)
+```
+
+**Memory API Endpoints:**
+```
+GET    /api/memory/:deskId              # List episodic memories (paginated, decrypted)
+GET    /api/memory/:deskId/facts        # List semantic facts (decrypted)
+DELETE /api/memory/:deskId/:memoryId    # Delete single memory
+DELETE /api/memory/:deskId              # Wipe all memories for desk
+POST   /api/chat-history/:deskId/end-session  # Signal session end, triggers memory generation
+```
+
+**Memory Viewer UI (AgentChat panel):**
+- Brain icon button in AgentChat header toggles collapsible memory section (max-height 320px, internal scroll)
+- Shows episodic memory list with source icons (chat/task/meeting), summary, relative time, hover-delete
+- Shows semantic facts sub-section (Pro/Enterprise only) with category badges and confidence percentages
+- "Wipe All" button with two-click confirmation
+- Purple accent (#a29bfe) to distinguish from personality (orange) and main theme (blue)
+
+**Memory Indicators (Office + Dashboard):**
+- **OfficeCanvas:** Purple dot at bottom-right of agent avatar (canvas-rendered, pulsing opacity via `Math.sin`)
+- **DashboardView:** Purple dot at bottom-right of agent card avatar (CSS-rendered with glow shadow)
+- Only visible when agent has `memoryCount > 0`
+
+**Memory Generation Animation:**
+- When a memory is generated (chat close or task complete), the agent's pixel avatar shows:
+  - Expanding purple ring around avatar (grows outward over 3 seconds)
+  - 3 small purple particles rising upward with sinusoidal drift
+  - All elements fade out via `globalAlpha` over the 3-second duration
+- Triggered via `onMemoryGenerated` callback from AgentChat to OfficeCanvas
+
+**Tier Limits:**
+
+| Feature | Free | Pro | Enterprise |
+|---------|------|-----|------------|
+| Episodic memories / desk | 50 | 500 | Unlimited |
+| Semantic compression | No | Yes (daily) | Yes (hourly) |
+| Vector similarity search | No | Yes | Yes |
+| Memory viewer UI | Yes | Yes | Yes |
+
+**Key Files:**
+- `migrations/019_agent_memory.sql` — Tables, RLS, IVFFlat indexes
+- `src/utils/memorySanitizer.ts` — Strips secrets before storage
+- `src/utils/embeddingService.ts` — OpenAI text-embedding-3-small
+- `src/utils/cheapAICaller.ts` — Resolves cheapest AI for background summarisation
+- `src/utils/memoryGenerator.ts` — generateChatMemory, generateTaskMemory, generateMeetingMemory
+- `src/utils/buildMemoryContext.ts` — "What You Remember" prompt block builder
+- `src/utils/memoryCompressor.ts` — Episodic to semantic compression
+- `src/routes/memory.ts` — CRUD API
+- `src/jobs/memoryCompression.ts` — Daily compression scheduler
+- `src/api/memory.ts` (frontend) — API client
+
+---
+
 ## Implementation Phases
 
 **Phase 1 (MVP - 4 weeks):**
@@ -761,6 +900,22 @@ saveChatMessages(deskId, user, assistant, model, cost)
 - [x] Agent Chat panel (glass-morphic floating panel, history persistence)
 - [ ] Rules analytics (most-triggered rules, suggestion acceptance rate)
 
+**Phase 2.8 (Agent Memory):**
+- [x] Memory migration (`019_agent_memory.sql` — 3 tables, pgvector, RLS, IVFFlat indexes)
+- [x] Memory sanitizer (strips secrets, API keys, PII patterns before storage)
+- [x] Embedding service (OpenAI text-embedding-3-small, 1536 dimensions)
+- [x] Cheap AI caller (resolves lowest-cost model for background summarisation)
+- [x] Memory generators (chat sessions, task completions, meeting endings)
+- [x] Memory context builder ("What You Remember" prompt block, injected at all AI callpoints)
+- [x] Memory compressor (episodic to semantic compression, Pro/Enterprise daily cron)
+- [x] Memory CRUD API (list, facts, delete, wipe, end-session endpoints)
+- [x] Memory Viewer UI (Brain icon in AgentChat, collapsible section with list/facts/wipe)
+- [x] Memory Indicator — OfficeCanvas (purple dot on pixel avatar, canvas-rendered with pulse)
+- [x] Memory Indicator — DashboardView (purple dot on agent card, CSS-rendered with glow)
+- [x] Memory Generation Animation (expanding purple ring + rising sparkle particles, 3s duration)
+- [ ] Memory search UI (search across memories within the viewer)
+- [ ] Memory export (download memory dump as JSON)
+
 **Phase 3 (Scale):**
 - Advanced analytics
 - Custom agents
@@ -776,5 +931,8 @@ saveChatMessages(deskId, user, assistant, model, cost)
 5. **Local Agent tech:** Node.js CLI (lowest cost) vs Tauri (best UX) -- decide after Pro tier launch
 6. **Rules storage:** Presets hardcoded in app code (not DB rows) — avoids migration churn, keeps presets versioned with code. Custom rules in DB.
 7. **Chat history cap:** 50 messages per desk, auto-pruned on insert — keeps storage bounded without needing a background cleanup job.
+8. **Memory encryption:** All memory content (episodic summaries, semantic facts) encrypted with AES-256-GCM at rest. Decrypted only on read via authenticated API endpoints.
+9. **Memory tier gating via backend:** Frontend has no tier checks for memory. Backend returns empty facts array for Free tier; UI simply hides the section when `facts.length === 0`. Memory limits enforced server-side.
+10. **Client-side memory counts:** Rather than adding memory counts to the desks API, the frontend fetches `getAgentMemories(deskId, 1, 0)` (limit=1) per desk to get the `total` count. Lightweight, zero backend changes needed.
 
 **Estimated infra cost at 100 teams:** ~$500/month (before profit)

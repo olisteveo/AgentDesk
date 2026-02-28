@@ -22,6 +22,7 @@ interface DashboardViewProps {
   taskLog: string[];
   taskResults: Record<string, string>;
   theme: 'dark' | 'light';
+  memoryCountMap?: Record<string, number>;
   onToggleTheme: () => void;
   onAgentClick: (agent: Agent) => void;
   onCreateTask: () => void;
@@ -39,6 +40,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   taskLog,
   taskResults,
   theme,
+  memoryCountMap,
   onToggleTheme,
   onAgentClick,
   onCreateTask,
@@ -119,6 +121,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
               <div className="dv-agent-top">
                 <div className="dv-agent-avatar">
                   {agent.name.charAt(0).toUpperCase()}
+                  {(() => {
+                    const deskId = agent.id.replace('agent-', '');
+                    const assignment = deskAssignments.find(a => a.deskId === deskId);
+                    const memCount = assignment?.backendDeskId ? (memoryCountMap?.[assignment.backendDeskId] ?? 0) : 0;
+                    return memCount > 0 ? <div className="dv-memory-dot" title={`${memCount} memories`} /> : null;
+                  })()}
                 </div>
                 <div className="dv-agent-info">
                   <div className="dv-agent-name">{agent.name}</div>

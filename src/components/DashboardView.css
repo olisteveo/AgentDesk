@@ -87,6 +87,19 @@
   font-weight: 700;
   font-size: 14px;
   flex-shrink: 0;
+  position: relative;
+}
+
+.dv-memory-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #a29bfe;
+  border: 2px solid #1a1a2e;
+  box-shadow: 0 0 6px rgba(162, 155, 254, 0.4);
 }
 
 .dv-agent-info {
@@ -592,6 +605,10 @@
 
 [data-theme="light"] .dv-status-dot {
   background: #ccc;
+}
+
+[data-theme="light"] .dv-memory-dot {
+  border-color: #fff;
 }
 
 /* Task filters */

@@ -20,7 +20,7 @@ export interface RoleArchetype {
 export const ROLE_ARCHETYPES: RoleArchetype[] = [
   {
     id: 'coding',
-    icon: '\u{1F4BB}',
+    icon: 'code',
     title: 'Coding Assistant',
     tagline: 'Writes clean code, debugs issues, reviews PRs',
     category: 'engineering',
@@ -32,7 +32,7 @@ export const ROLE_ARCHETYPES: RoleArchetype[] = [
   },
   {
     id: 'writing',
-    icon: '\u{270D}\uFE0F',
+    icon: 'pen-tool',
     title: 'Writing Editor',
     tagline: 'Drafts content, edits copy, writes emails',
     category: 'content',
@@ -44,7 +44,7 @@ export const ROLE_ARCHETYPES: RoleArchetype[] = [
   },
   {
     id: 'research',
-    icon: '\u{1F50D}',
+    icon: 'search',
     title: 'Research Analyst',
     tagline: 'Investigates topics, summarizes findings, compares options',
     category: 'research',
@@ -56,7 +56,7 @@ export const ROLE_ARCHETYPES: RoleArchetype[] = [
   },
   {
     id: 'creative',
-    icon: '\u{1F3A8}',
+    icon: 'palette',
     title: 'Creative Designer',
     tagline: 'UI/UX thinking, branding ideas, visual concepts',
     category: 'design',
@@ -68,7 +68,7 @@ export const ROLE_ARCHETYPES: RoleArchetype[] = [
   },
   {
     id: 'data',
-    icon: '\u{1F4CA}',
+    icon: 'bar-chart',
     title: 'Data Analyst',
     tagline: 'SQL queries, data viz, statistical analysis',
     category: 'data',
@@ -80,7 +80,7 @@ export const ROLE_ARCHETYPES: RoleArchetype[] = [
   },
   {
     id: 'general',
-    icon: '\u{1F31F}',
+    icon: 'sparkles',
     title: 'General Assistant',
     tagline: 'Versatile helper for any task',
     category: 'general',

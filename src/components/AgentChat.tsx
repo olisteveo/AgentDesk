@@ -8,10 +8,11 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Send, Trash2, Download, Sparkles, Check } from 'lucide-react';
+import { X, Send, Trash2, Download, Sparkles, Check, Brain, MessageCircle, ClipboardList, Users, AlertTriangle } from 'lucide-react';
 import { sendChat, getChatHistory, saveChatMessages, clearChatHistory } from '../api/chat';
 import type { PersistedMessage } from '../api/chat';
-import { signalChatSessionEnd } from '../api/memory';
+import { signalChatSessionEnd, getAgentMemories, getAgentFacts, deleteMemory, wipeAgentMemory } from '../api/memory';
+import type { EpisodicMemoryItem, SemanticFactItem } from '../api/memory';
 import { createDesk, updateDesk } from '../api/desks';
 import { parseCodeBlocks } from '../utils/parseCodeBlocks';
 import { downloadCodeBlock } from '../utils/download';
@@ -45,6 +46,7 @@ interface AgentChatProps {
   updateTodayCost: (cost: number) => void;
   addLogEntry: (message: string) => void;
   onClose: () => void;
+  onMemoryGenerated?: (localDeskId: string) => void;
   modelPricing: Record<string, { name: string; input: number; output: number }>;
 }
 
@@ -58,6 +60,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
   updateTodayCost,
   addLogEntry,
   onClose,
+  onMemoryGenerated,
   modelPricing,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -72,6 +75,16 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const [personalityText, setPersonalityText] = useState('');
   const [savingPersonality, setSavingPersonality] = useState(false);
   const [personalitySaved, setPersonalitySaved] = useState(false);
+
+  // Memory viewer
+  const [showMemory, setShowMemory] = useState(false);
+  const [memories, setMemories] = useState<EpisodicMemoryItem[]>([]);
+  const [facts, setFacts] = useState<SemanticFactItem[]>([]);
+  const [memoryTotal, setMemoryTotal] = useState(0);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [wipingMemory, setWipingMemory] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
+  const [deletingMemoryId, setDeletingMemoryId] = useState<string | null>(null);
 
   const modelId = getModelForAgent(agent.id);
   const modelName = modelPricing[modelId]?.name || modelId;
@@ -326,16 +339,102 @@ const AgentChat: React.FC<AgentChatProps> = ({
     }
   };
 
+  // ── Load memories when viewer opens ─────────────────────────
+
+  useEffect(() => {
+    if (!showMemory) return;
+    let cancelled = false;
+
+    const loadMemories = async () => {
+      setMemoryLoading(true);
+      const deskId = await resolveBackendDeskId();
+      if (!deskId || cancelled) { setMemoryLoading(false); return; }
+
+      try {
+        const [memResult, factResult] = await Promise.all([
+          getAgentMemories(deskId),
+          getAgentFacts(deskId),
+        ]);
+        if (cancelled) return;
+        setMemories(memResult.memories);
+        setMemoryTotal(memResult.total);
+        setFacts(factResult);
+      } catch {
+        // Silently fail
+      } finally {
+        if (!cancelled) setMemoryLoading(false);
+      }
+    };
+
+    loadMemories();
+    return () => { cancelled = true; };
+  }, [showMemory, resolveBackendDeskId]);
+
+  // ── Memory helpers ─────────────────────────────────────────
+
+  const relativeTime = (iso: string): string => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days === 1) return 'yesterday';
+    if (days < 7) return `${days}d ago`;
+    return new Date(iso).toLocaleDateString();
+  };
+
+  const memorySourceIcon = (source: string) => {
+    switch (source) {
+      case 'chat': return <MessageCircle size={12} />;
+      case 'task': return <ClipboardList size={12} />;
+      case 'meeting': return <Users size={12} />;
+      default: return <Brain size={12} />;
+    }
+  };
+
+  const handleDeleteMemory = async (memoryId: string) => {
+    const deskId = await resolveBackendDeskId();
+    if (!deskId) return;
+    setDeletingMemoryId(memoryId);
+    try {
+      await deleteMemory(deskId, memoryId);
+      setMemories(prev => prev.filter(m => m.id !== memoryId));
+      setFacts(prev => prev.filter(f => f.id !== memoryId));
+      setMemoryTotal(prev => Math.max(0, prev - 1));
+    } catch { /* ignore */ }
+    finally { setDeletingMemoryId(null); }
+  };
+
+  const handleWipeMemory = async () => {
+    if (!confirmWipe) { setConfirmWipe(true); return; }
+    const deskId = await resolveBackendDeskId();
+    if (!deskId) return;
+    setWipingMemory(true);
+    try {
+      await wipeAgentMemory(deskId);
+      setMemories([]);
+      setFacts([]);
+      setMemoryTotal(0);
+      setConfirmWipe(false);
+    } catch { /* ignore */ }
+    finally { setWipingMemory(false); }
+  };
+
   // ── Close handler (signals session end for memory generation) ──
 
   const handleClose = useCallback(async () => {
     if (sessionMsgCount.current >= 4) {
+      const localDeskId = agent.id.replace('agent-', '');
       resolveBackendDeskId().then(deskId => {
         if (deskId) signalChatSessionEnd(deskId).catch(() => {});
       }).catch(() => {});
+      // Trigger memory animation on the office avatar
+      onMemoryGenerated?.(localDeskId);
     }
     onClose();
-  }, [onClose, resolveBackendDeskId]);
+  }, [onClose, resolveBackendDeskId, agent.id, onMemoryGenerated]);
 
   // ── Main render ─────────────────────────────────────────────
 
@@ -357,6 +456,12 @@ const AgentChat: React.FC<AgentChatProps> = ({
               onClick={() => setShowPersonality(!showPersonality)}
               title="Edit personality">
               <Sparkles size={14} />
+            </button>
+            <button
+              className={`ac-icon-btn${showMemory ? ' active-memory' : ''}`}
+              onClick={() => { setShowMemory(!showMemory); setConfirmWipe(false); }}
+              title="View memories">
+              <Brain size={14} />
             </button>
             {messages.length > 0 && (
               <button className="ac-icon-btn" onClick={handleClear} title="Clear history">
@@ -388,6 +493,76 @@ const AgentChat: React.FC<AgentChatProps> = ({
                 {personalitySaved ? <><Check size={12} /> Saved</> : savingPersonality ? 'Saving...' : 'Save Personality'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Memory viewer */}
+        {showMemory && (
+          <div className="ac-memory-section">
+            {memoryLoading ? (
+              <div className="ac-memory-loading">
+                <div className="ac-spinner" />
+              </div>
+            ) : memories.length === 0 && facts.length === 0 ? (
+              <div className="ac-memory-empty">
+                <Brain size={18} />
+                <p>No memories yet. As you interact, {agent.name} will remember key moments.</p>
+              </div>
+            ) : (
+              <>
+                <div className="ac-memory-header-row">
+                  <span className="ac-memory-count">{memoryTotal} memor{memoryTotal === 1 ? 'y' : 'ies'}</span>
+                </div>
+
+                {/* Episodic memories list */}
+                <div className="ac-memory-list">
+                  {memories.map(mem => (
+                    <div key={mem.id} className="ac-memory-item">
+                      <div className="ac-memory-source">{memorySourceIcon(mem.source)}</div>
+                      <div className="ac-memory-body">
+                        <div className="ac-memory-summary">{mem.summary}</div>
+                        <div className="ac-memory-time">{relativeTime(mem.interactionAt)}</div>
+                      </div>
+                      <button
+                        className="ac-memory-delete"
+                        onClick={() => handleDeleteMemory(mem.id)}
+                        disabled={deletingMemoryId === mem.id}
+                        title="Delete memory">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Semantic facts (only shown if backend returns any — tier-gated server-side) */}
+                {facts.length > 0 && (
+                  <div className="ac-facts-section">
+                    <div className="ac-facts-label">Learned Facts</div>
+                    {facts.map(fact => (
+                      <div key={fact.id} className="ac-fact-item">
+                        <span className="ac-fact-category">{fact.category.replace(/_/g, ' ')}</span>
+                        <span className="ac-fact-text">{fact.fact}</span>
+                        <span className="ac-fact-confidence" style={{ opacity: 0.4 + fact.confidence * 0.6 }}>
+                          {Math.round(fact.confidence * 100)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Wipe all button */}
+                <button
+                  className={`ac-wipe-btn${confirmWipe ? ' confirm' : ''}`}
+                  onClick={handleWipeMemory}
+                  disabled={wipingMemory}>
+                  {wipingMemory ? 'Wiping...' : confirmWipe ? (
+                    <><AlertTriangle size={12} /> Confirm Wipe All</>
+                  ) : (
+                    <><Trash2 size={12} /> Wipe All Memories</>
+                  )}
+                </button>
+              </>
+            )}
           </div>
         )}
 
